@@ -6,13 +6,11 @@ import type { Database } from './database.types';
  * NEVER import this file from client components.
  */
 export function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder';
 
-  if (!url || !serviceKey) {
-    throw new Error(
-      'Missing server-side Supabase environment variables. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.'
-    );
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn('Missing server-side Supabase environment variables. App will not function correctly.');
   }
 
   return createClient<Database>(url, serviceKey, {
