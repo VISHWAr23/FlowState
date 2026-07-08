@@ -17,16 +17,18 @@ import {
   Edit3,
   X,
 } from 'lucide-react';
-import { useGoals, useCreateGoal, useLifeAreas } from '@/hooks';
+import { useGoals, useCreateGoal, useUpdateGoal, useDeleteGoal, useLifeAreas } from '@/hooks';
 import { useAppStore } from '@/lib/store';
 import { cn, formatDate } from '@/lib/utils';
 import type { Goal, KeyResult } from '@/types';
 
 export function GoalsView() {
   const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const { data: goals, isLoading } = useGoals(activeTab);
   const { data: areas } = useLifeAreas();
+  const deleteGoal = useDeleteGoal();
 
   return (
     <div className="space-y-8">
@@ -38,7 +40,7 @@ export function GoalsView() {
           </p>
         </div>
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => { setSelectedGoal(null); setShowGoalModal(true); }}
           className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
         >
           <Plus className="w-4 h-4" />
@@ -72,7 +74,13 @@ export function GoalsView() {
           </div>
         ) : goals && goals.length > 0 ? (
           goals.map((goal, index) => (
-            <GoalCard key={goal.id} goal={goal as any} index={index} />
+            <GoalCard 
+              key={goal.id} 
+              goal={goal as any} 
+              index={index} 
+              onEdit={() => { setSelectedGoal(goal as any); setShowGoalModal(true); }}
+              onDelete={() => deleteGoal.mutate(goal.id)}
+            />
           ))
         ) : (
           <div className="text-center py-16 text-muted-foreground">
@@ -85,18 +93,23 @@ export function GoalsView() {
         )}
       </div>
 
-      {/* Create Modal */}
+      {/* Goal Modal */}
       <AnimatePresence>
-        {showCreateModal && (
-          <CreateGoalModal onClose={() => setShowCreateModal(false)} areas={areas || []} />
+        {showGoalModal && (
+          <GoalModal 
+            onClose={() => setShowGoalModal(false)} 
+            areas={areas || []} 
+            goal={selectedGoal}
+          />
         )}
       </AnimatePresence>
     </div>
   );
 }
 
-function GoalCard({ goal, index }: { goal: Goal & { life_area?: any, key_results?: any[] }; index: number }) {
+function GoalCard({ goal, index, onEdit, onDelete }: { goal: Goal & { life_area?: any, key_results?: any[] }; index: number; onEdit: () => void; onDelete: () => void; }) {
   const [expanded, setExpanded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const area = goal.life_area;
   const progress = goal.progress || 0;
 
@@ -174,13 +187,49 @@ function GoalCard({ goal, index }: { goal: Goal & { life_area?: any, key_results
             </div>
           </div>
 
-          {/* Expand Button */}
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="p-2 rounded-lg hover:bg-accent transition-colors"
-          >
-            {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-          </button>
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="p-2 rounded-lg hover:bg-accent transition-colors"
+            >
+              {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </button>
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="p-2 rounded-lg hover:bg-accent transition-colors"
+              >
+                <MoreHorizontal className="w-5 h-5" />
+              </button>
+              <AnimatePresence>
+                {menuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="absolute right-0 top-full mt-1 w-32 bg-popover border border-border rounded-lg shadow-lg overflow-hidden z-20"
+                    >
+                      <button
+                        onClick={() => { setMenuOpen(false); onEdit(); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors"
+                      >
+                        <Edit3 className="w-4 h-4" /> Edit
+                      </button>
+                      <button
+                        onClick={() => { setMenuOpen(false); onDelete(); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" /> Delete
+                      </button>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -239,34 +288,53 @@ function KeyResultRow({ kr, color, index }: { kr: KeyResult; color: string; inde
   );
 }
 
-function CreateGoalModal({ onClose, areas }: { onClose: () => void; areas: any[] }) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [areaId, setAreaId] = useState('');
-  const [priority, setPriority] = useState(3);
-  const [targetDate, setTargetDate] = useState('');
-  const [keyResults, setKeyResults] = useState([{ title: '', target_value: 100, unit: '%' }]);
+function GoalModal({ onClose, areas, goal }: { onClose: () => void; areas: any[]; goal?: Goal | null }) {
+  const [title, setTitle] = useState(goal?.title || '');
+  const [description, setDescription] = useState(goal?.description || '');
+  const [areaId, setAreaId] = useState(goal?.life_area_id || '');
+  const [priority, setPriority] = useState(goal?.priority || 3);
+  const [targetDate, setTargetDate] = useState(goal?.target_date || '');
+  
+  const initialKeyResults = goal?.key_results && goal.key_results.length > 0 
+    ? goal.key_results.map(kr => ({ title: kr.title, target_value: kr.target_value, unit: kr.unit })) 
+    : [{ title: '', target_value: 100, unit: '%' }];
+    
+  const [keyResults, setKeyResults] = useState(initialKeyResults);
 
   const createGoal = useCreateGoal();
+  const updateGoal = useUpdateGoal();
   const addToast = useAppStore((state) => state.addToast);
 
   const handleSubmit = () => {
     if (!title || !areaId || !targetDate) return;
 
-    createGoal.mutate({
+    const goalData = {
       title,
       description,
       life_area_id: areaId,
       priority,
       target_date: targetDate,
-      start_date: new Date().toISOString().split('T')[0],
       key_results: keyResults.filter(kr => kr.title) as any,
-    }, {
-      onSuccess: () => {
-        onClose();
-        addToast({ type: 'success', title: 'Goal created successfully' });
-      }
-    });
+    };
+
+    if (goal) {
+      updateGoal.mutate({ id: goal.id, updates: goalData }, {
+        onSuccess: () => {
+          onClose();
+          addToast({ type: 'success', title: 'Goal updated successfully' });
+        }
+      });
+    } else {
+      createGoal.mutate({
+        ...goalData,
+        start_date: new Date().toISOString().split('T')[0],
+      }, {
+        onSuccess: () => {
+          onClose();
+          addToast({ type: 'success', title: 'Goal created successfully' });
+        }
+      });
+    }
   };
 
   const addKeyResult = () => {
@@ -290,7 +358,7 @@ function CreateGoalModal({ onClose, areas }: { onClose: () => void; areas: any[]
       >
         <div className="p-6 space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold">Create New Goal</h2>
+            <h2 className="text-xl font-bold">{goal ? 'Edit Goal' : 'Create New Goal'}</h2>
             <button onClick={onClose} className="p-2 rounded-lg hover:bg-accent cursor-pointer">
               <X className="w-5 h-5" />
             </button>
@@ -400,10 +468,10 @@ function CreateGoalModal({ onClose, areas }: { onClose: () => void; areas: any[]
 
           <button
             onClick={handleSubmit}
-            disabled={!title || !areaId || !targetDate}
+            disabled={!title || !areaId || !targetDate || updateGoal.isPending || createGoal.isPending}
             className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
-            Create Goal
+            {goal ? 'Update Goal' : 'Create Goal'}
           </button>
         </div>
       </motion.div>

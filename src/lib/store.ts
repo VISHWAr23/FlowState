@@ -53,6 +53,10 @@ interface AppState {
   addTimeBlock: (block: Omit<TimeBlock, 'id'>) => void;
   updateTimeBlock: (id: string, updates: Partial<TimeBlock>) => void;
   deleteTimeBlock: (id: string) => void;
+
+  // Daily Scorecard Local State
+  dailyScores: Record<string, Record<string, boolean>>;
+  updateDailyScore: (date: string, scoreId: string, value: boolean) => void;
 }
 
 interface Toast {
@@ -152,6 +156,17 @@ export const useAppStore = create<AppState>()(
       deleteTimeBlock: (id) => set((state) => ({
         timeBlocks: state.timeBlocks.filter(tb => tb.id !== id)
       })),
+
+      dailyScores: {},
+      updateDailyScore: (date, scoreId, value) => set((state) => ({
+        dailyScores: {
+          ...state.dailyScores,
+          [date]: {
+            ...(state.dailyScores[date] || {}),
+            [scoreId]: value
+          }
+        }
+      })),
     }),
     {
       name: 'flowstate-store',
@@ -166,6 +181,7 @@ export const useAppStore = create<AppState>()(
         focusStartedAt: state.focusStartedAt,
         focusPausedAt: state.focusPausedAt,
         focusElapsedBeforePause: state.focusElapsedBeforePause,
+        dailyScores: state.dailyScores,
       }),
     }
   )

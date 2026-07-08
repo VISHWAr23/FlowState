@@ -355,6 +355,58 @@ export function useCreateGoal() {
   });
 }
 
+export function useUpdateGoal() {
+  const queryClient = useQueryClient();
+  const addToast = useAppStore((state) => state.addToast);
+  return useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Goal> & { key_results?: any[] } }) => {
+      const { key_results, ...goalData } = updates;
+      const { data, error } = await supabaseBrowser
+        .from('goals')
+        .update(goalData)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      
+      // Basic KR update handling: delete all and recreate for simplicity (or let user do it if implemented)
+      if (key_results) {
+        await supabaseBrowser.from('key_results').delete().eq('goal_id', id);
+        if (key_results.length > 0) {
+          const krs = key_results.map((kr, i) => ({ ...kr, goal_id: id, sort_order: i }));
+          await supabaseBrowser.from('key_results').insert(krs);
+        }
+      }
+      return data as Goal;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      addToast({ type: 'success', title: 'Goal updated' });
+    },
+    onError: () => addToast({ type: 'error', title: 'Failed to update goal' })
+  });
+}
+
+export function useDeleteGoal() {
+  const queryClient = useQueryClient();
+  const addToast = useAppStore((state) => state.addToast);
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabaseBrowser
+        .from('goals')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
+      addToast({ type: 'success', title: 'Goal deleted' });
+    },
+    onError: () => addToast({ type: 'error', title: 'Failed to delete goal' })
+  });
+}
+
 // ==================== FOCUS SESSION HOOKS ====================
 export function useFocusSessions() {
   return useQuery({

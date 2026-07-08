@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Send, X, Bot, User, Loader2, Sparkles } from 'lucide-react';
 import { useTasks, useHabits } from '@/hooks/hooks';
@@ -11,6 +12,7 @@ import { getToday } from '@/lib/utils';
 export function AssistantChat() {
   const [isOpen, setIsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [input, setInput] = useState('');
   
   // Fetch context for the AI
   const { data: tasks } = useTasks(getToday());
@@ -25,38 +27,36 @@ Active Habits:
 ${habits?.map(h => `- ${h.title} (Target: ${h.target_duration_minutes ? h.target_duration_minutes + ' min' : 'completion'})`).join('\n') || 'No active habits.'}
   `.trim();
 
-  const { messages, status, sendMessage } = useChat({
-    api: '/api/chat',
-    body: {
-      context: contextString,
-    },
-    initialMessages: [
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({
+      api: '/api/chat',
+      body: {
+        context: contextString,
+      },
+    }),
+    messages: [
       {
         id: 'welcome',
-        role: 'assistant',
-        parts: [{ type: 'text', text: "Hi! I'm FlowState AI, your personal productivity coach. What would you like to focus on today?" }],
+        role: 'assistant' as const,
+        parts: [{ type: 'text' as const, text: "Hi! I'm FlowState AI, your personal productivity coach. What would you like to focus on today?" }],
       }
     ]
-  } as any);
+  });
 
-  const [input, setInput] = useState('');
-  
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInput(e.target.value);
-  };
-  
+  const isLoading = status === 'submitted' || status === 'streaming';
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
     
-    sendMessage({
-      role: 'user',
-      parts: [{ type: 'text', text: input }],
-    });
+    sendMessage({ text: input });
     setInput('');
   };
 
-  const isLoading = status === 'submitted' || status === 'streaming';
+  const handleQuickPrompt = (prompt: string) => {
+    if (isLoading) return;
+    sendMessage({ text: prompt });
+  };
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -64,6 +64,21 @@ ${habits?.map(h => `- ${h.title} (Target: ${h.target_duration_minutes ? h.target
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+
+  // Helper to extract message text content
+  const getMessageText = (message: any): string => {
+    // Support both formats: message.content (string) and message.parts (array)
+    if (typeof message.content === 'string' && message.content) {
+      return message.content;
+    }
+    if (message.parts && Array.isArray(message.parts)) {
+      return message.parts
+        .filter((p: any) => p.type === 'text')
+        .map((p: any) => p.text)
+        .join('');
+    }
+    return '';
+  };
 
   return (
     <>
@@ -97,40 +112,46 @@ ${habits?.map(h => `- ${h.title} (Target: ${h.target_duration_minutes ? h.target
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={cn(
-                    "flex w-full gap-3 text-sm",
-                    message.role === 'user' ? "justify-end" : "justify-start"
-                  )}
-                >
-                  {message.role === 'assistant' && (
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <Bot className="w-4 h-4 text-primary" />
-                    </div>
-                  )}
-                  
+              {messages.map((message) => {
+                const text = getMessageText(message);
+                if (!text) return null;
+                const role = message.role as string;
+                
+                return (
                   <div
+                    key={message.id}
                     className={cn(
-                      "px-4 py-2.5 rounded-2xl max-w-[80%]",
-                      message.role === 'user'
-                        ? "bg-primary text-primary-foreground rounded-br-sm"
-                        : "bg-accent/50 text-foreground border border-border rounded-bl-sm"
+                      "flex w-full gap-3 text-sm",
+                      role === 'user' ? "justify-end" : "justify-start"
                     )}
                   >
-                    {message.parts?.map((part, i) => part.type === 'text' ? <span key={i}>{part.text}</span> : null)}
-                  </div>
-
-                  {message.role === 'user' && (
-                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                      <User className="w-4 h-4 text-muted-foreground" />
+                    {role === 'assistant' && (
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <Bot className="w-4 h-4 text-primary" />
+                      </div>
+                    )}
+                    
+                    <div
+                      className={cn(
+                        "px-4 py-2.5 rounded-2xl max-w-[80%] whitespace-pre-wrap",
+                        role === 'user'
+                          ? "bg-primary text-primary-foreground rounded-br-sm"
+                          : "bg-accent/50 text-foreground border border-border rounded-bl-sm"
+                      )}
+                    >
+                      {text}
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {role === 'user' && (
+                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               
-              {isLoading && messages[messages.length - 1]?.role === 'user' && (
+              {isLoading && (messages[messages.length - 1]?.role as string) === 'user' && (
                 <div className="flex w-full gap-3 text-sm justify-start">
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                     <Bot className="w-4 h-4 text-primary" />
@@ -150,9 +171,7 @@ ${habits?.map(h => `- ${h.title} (Target: ${h.target_duration_minutes ? h.target
                 {['Analyze my market journal', 'Generate a Spring Boot question', 'Assess my English paragraph'].map((prompt) => (
                   <button
                     key={prompt}
-                    onClick={() => {
-                      sendMessage({ role: 'user', parts: [{ type: 'text', text: prompt }] });
-                    }}
+                    onClick={() => handleQuickPrompt(prompt)}
                     className="text-xs bg-accent hover:bg-accent/80 text-foreground px-3 py-1.5 rounded-full transition-colors whitespace-nowrap border border-border"
                   >
                     {prompt}
@@ -168,15 +187,15 @@ ${habits?.map(h => `- ${h.title} (Target: ${h.target_duration_minutes ? h.target
                 className="flex items-center gap-2 bg-accent/50 rounded-full border border-border pl-4 pr-1 py-1"
               >
                 <input
-                  value={input || ''}
-                  onChange={handleInputChange}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask for advice or motivation..."
                   className="flex-1 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-muted-foreground py-2"
                   disabled={isLoading}
                 />
                 <button
                   type="submit"
-                  disabled={isLoading || !(input || '').trim()}
+                  disabled={isLoading || !input.trim()}
                   className="w-8 h-8 rounded-full bg-primary flex items-center justify-center disabled:opacity-50 transition-opacity cursor-pointer text-primary-foreground shrink-0"
                 >
                   <Send className="w-4 h-4 ml-0.5" />

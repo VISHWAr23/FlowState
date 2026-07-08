@@ -4,7 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { CheckCircle2, Circle, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
-import { useDailyLog, useUpsertDailyLog } from '@/hooks';
+import { useAppStore } from '@/lib/store';
 import { getToday } from '@/lib/utils';
 
 const SCORECARD_ITEMS = [
@@ -23,27 +23,25 @@ type ScorecardKey = (typeof SCORECARD_ITEMS)[number]['id'];
 
 export function DailyScorecard() {
   const today = getToday();
-  const { data: dailyLog } = useDailyLog(today);
-  const upsertLog = useUpsertDailyLog();
+  const dailyScores = useAppStore((state) => state.dailyScores);
+  const updateDailyScore = useAppStore((state) => state.updateDailyScore);
 
-  // Derive scores from persisted daily log data
+  // Derive scores from local state
   const scores = useMemo(() => {
     const result: Record<string, boolean> = {};
+    const todayScores = dailyScores[today] || {};
     for (const item of SCORECARD_ITEMS) {
-      result[item.id] = !!(dailyLog as unknown as Record<string, unknown>)?.[item.id];
+      result[item.id] = !!todayScores[item.id];
     }
     return result;
-  }, [dailyLog]);
+  }, [dailyScores, today]);
 
   const toggleScore = useCallback(
     (id: ScorecardKey) => {
       const newValue = !scores[id];
-      upsertLog.mutate({
-        log_date: today,
-        [id]: newValue,
-      });
+      updateDailyScore(today, id, newValue);
     },
-    [scores, today, upsertLog]
+    [scores, today, updateDailyScore]
   );
 
   const currentScore = Object.values(scores).filter(Boolean).length;
