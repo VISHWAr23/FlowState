@@ -4,19 +4,23 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, Trash2 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
+import { getToday } from '@/lib/utils';
 import type { TimeBlock } from '@/types/types';
 
 interface TimeBlockModalProps {
   isOpen: boolean;
   onClose: () => void;
   block: TimeBlock | null;
+  selectedDate?: string | null;
 }
 
-export function TimeBlockModal({ isOpen, onClose, block }: TimeBlockModalProps) {
+
+export function TimeBlockModal({ isOpen, onClose, block, selectedDate }: TimeBlockModalProps) {
   const [title, setTitle] = useState('');
-  const [startHour, setStartHour] = useState(9);
+  const [startHour, setStartHour] = useState(8.5);
   const [durationHours, setDurationHours] = useState(1);
   const [color, setColor] = useState('bg-primary/10 text-primary border-primary/20');
+  const [recurrence, setRecurrence] = useState<'today' | 'daily'>('today');
   
   const addTimeBlock = useAppStore((state) => state.addTimeBlock);
   const updateTimeBlock = useAppStore((state) => state.updateTimeBlock);
@@ -28,11 +32,13 @@ export function TimeBlockModal({ isOpen, onClose, block }: TimeBlockModalProps) 
       setStartHour(block.startHour);
       setDurationHours(block.durationHours);
       setColor(block.color);
+      setRecurrence(block.date ? 'today' : 'daily');
     } else {
       setTitle('');
-      setStartHour(9);
+      setStartHour(8.5);
       setDurationHours(1);
       setColor('bg-primary/10 text-primary border-primary/20');
+      setRecurrence('today');
     }
   }, [block, isOpen]);
 
@@ -41,16 +47,19 @@ export function TimeBlockModal({ isOpen, onClose, block }: TimeBlockModalProps) 
   const handleSave = () => {
     if (!title.trim()) return;
     
+    const blockData = {
+      title,
+      startHour,
+      durationHours,
+      color,
+      days: recurrence === 'daily' ? [0, 1, 2, 3, 4, 5, 6] : [],
+      date: recurrence === 'today' ? (selectedDate || getToday()) : undefined,
+    };
+
     if (block) {
-      updateTimeBlock(block.id, { title, startHour, durationHours, color });
+      updateTimeBlock(block.id, blockData);
     } else {
-      addTimeBlock({
-        title,
-        startHour,
-        durationHours,
-        color,
-        days: [1, 2, 3, 4, 5], // default to Mon-Fri for now
-      });
+      addTimeBlock(blockData);
     }
     onClose();
   };
@@ -112,11 +121,11 @@ export function TimeBlockModal({ isOpen, onClose, block }: TimeBlockModalProps) 
                   <label className="text-sm font-medium mb-1.5 block">Start Hour</label>
                   <input
                     type="number"
-                    min="6"
-                    max="23"
+                    min="0"
+                    max="23.75"
                     step="0.25"
                     value={startHour}
-                    onChange={(e) => setStartHour(parseFloat(e.target.value) || 9)}
+                    onChange={(e) => setStartHour(parseFloat(e.target.value) || 8.5)}
                     className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
@@ -146,6 +155,24 @@ export function TimeBlockModal({ isOpen, onClose, block }: TimeBlockModalProps) 
                       {preset.label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-1.5 block">Recurrence</label>
+                <div className="flex bg-muted/50 p-1 rounded-lg">
+                  <button
+                    onClick={() => setRecurrence('today')}
+                    className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${recurrence === 'today' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Today Only
+                  </button>
+                  <button
+                    onClick={() => setRecurrence('daily')}
+                    className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${recurrence === 'daily' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    Daily
+                  </button>
                 </div>
               </div>
             </div>

@@ -76,6 +76,7 @@ export interface Task {
   parent_task_id: string | null;
   title: string;
   description: string | null;
+  notes?: string | null;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   energy_level: 'low' | 'medium' | 'high' | null;
@@ -146,12 +147,14 @@ export interface FocusSession {
   ended_at: string | null;
   planned_duration: number;
   actual_duration: number | null;
-  status: 'active' | 'completed' | 'interrupted' | 'abandoned';
-  interruptions: number;
-  interruption_notes: string[] | null;
+  status: 'active' | 'completed' | 'interrupted' | 'abandoned' | 'cancelled';
+  session_type?: string;
+  interruptions?: number;
+  interruption_notes?: string[] | null;
   flow_rating: number | null;
   notes: string | null;
-  xp_earned: number;
+  reflection_notes?: string | null;
+  xp_earned?: number;
   created_at: string;
   task?: Task;
   goal?: Goal;
@@ -290,7 +293,8 @@ export interface TimeBlock {
   startHour: number;
   durationHours: number;
   color: string;
-  days: number[]; // 0 = Sunday, 1 = Monday, etc.
+  days: number[]; // 0 = Sunday, 1 = Monday, etc. (for recurring blocks)
+  date?: string; // YYYY-MM-DD for one-off blocks (today only)
 }
 
 export const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; value: number }> = {

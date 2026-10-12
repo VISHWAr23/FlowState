@@ -1,5 +1,5 @@
-import { DailyExecution } from '@/components/daily';
+import { Dashboard } from '@/components/dashboard';
 
 export default function DailyPage() {
-  return <DailyExecution />;
+  return <Dashboard />;
 }

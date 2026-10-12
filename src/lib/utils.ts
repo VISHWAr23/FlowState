@@ -5,8 +5,28 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function parseLocalDate(dateInput: string | Date): Date {
+  if (dateInput instanceof Date) return dateInput;
+  if (typeof dateInput === 'string') {
+    const cleanStr = dateInput.split('T')[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) {
+      const [year, month, day] = cleanStr.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    }
+  }
+  return new Date(dateInput);
+}
+
+export function toLocalDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function formatDate(date: string | Date): string {
-  return new Date(date).toLocaleDateString('en-US', {
+  const d = parseLocalDate(date);
+  return d.toLocaleDateString('en-US', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
@@ -14,7 +34,8 @@ export function formatDate(date: string | Date): string {
 }
 
 export function formatDateFull(date: string | Date): string {
-  return new Date(date).toLocaleDateString('en-US', {
+  const d = parseLocalDate(date);
+  return d.toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
@@ -23,7 +44,8 @@ export function formatDateFull(date: string | Date): string {
 }
 
 export function formatTime(date: string | Date): string {
-  return new Date(date).toLocaleTimeString('en-US', {
+  const d = typeof date === 'string' && !date.includes('T') ? parseLocalDate(date) : new Date(date);
+  return d.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
   });
@@ -38,29 +60,30 @@ export function formatDuration(minutes: number): string {
 }
 
 export function getToday(): string {
-  const date = new Date();
-  return new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+  return toLocalDateString(new Date());
 }
 
 export function getWeekStart(date: string | Date = new Date()): string {
-  const d = new Date(date);
+  const d = parseLocalDate(date);
   const day = d.getDay();
-  const diff = d.getDate() - day;
-  return new Date(d.setDate(diff)).toISOString().split('T')[0];
+  // Monday start: if day is 0 (Sunday), diff is -6; else diff is 1 - day
+  const diff = d.getDate() - (day === 0 ? 6 : day - 1);
+  const monday = new Date(d.getFullYear(), d.getMonth(), diff);
+  return toLocalDateString(monday);
 }
 
 export function getWeekEnd(date: string | Date = new Date()): string {
-  const start = new Date(getWeekStart(date));
-  start.setDate(start.getDate() + 6);
-  return start.toISOString().split('T')[0];
+  const monday = parseLocalDate(getWeekStart(date));
+  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+  return toLocalDateString(sunday);
 }
 
 export function isToday(date: string): boolean {
-  return date === getToday();
+  return date.split('T')[0] === getToday();
 }
 
 export function isOverdue(date: string): boolean {
-  return new Date(date) < new Date(getToday());
+  return date.split('T')[0] < getToday();
 }
 
 

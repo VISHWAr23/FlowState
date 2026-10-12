@@ -3,14 +3,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Clock, Plus, ChevronLeft, ChevronRight, AlertCircle, Calendar as CalendarIcon, LayoutGrid } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, toLocalDateString } from '@/lib/utils';
 import { useTasks } from '@/hooks';
 import { useAppStore } from '@/lib/store';
 import { TimeBlockModal } from './modals/timeblock-modal';
 import type { TimeBlock } from '@/types/types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 6 AM to 11 PM
+const HOURS = Array.from({ length: 16 }, (_, i) => i + 8); // 8 AM to 11 PM
+
+const getColumnDate = (dayIndex: number, weekOffset: number) => {
+  const today = new Date();
+  const currentDay = today.getDay() === 0 ? 6 : today.getDay() - 1; // Mon = 0
+  const diff = dayIndex - currentDay + (weekOffset * 7);
+  const colDate = new Date(today);
+  colDate.setDate(today.getDate() + diff);
+  return toLocalDateString(colDate);
+};
 
 export function TimetableView() {
   const { data: tasks } = useTasks();
@@ -22,6 +31,7 @@ export function TimetableView() {
   const timeBlocks = useAppStore(state => state.timeBlocks);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedBlock, setSelectedBlock] = useState<TimeBlock | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -43,8 +53,8 @@ export function TimetableView() {
   };
 
   const currentHour = getCurrentHourDecimal();
-  const showCurrentTimeLine = currentHour >= 6 && currentHour <= 23;
-  const timeLineTop = (currentHour - 6) * 64; // 64px per hour
+  const showCurrentTimeLine = currentHour >= 8 && currentHour <= 23.99;
+  const timeLineTop = (currentHour - 8) * 80; // 80px per hour
 
   return (
     <div className="space-y-6">
@@ -112,8 +122,8 @@ export function TimetableView() {
           </div>
 
           <button 
-            onClick={() => { setSelectedBlock(null); setIsModalOpen(true); }}
-            className="w-full sm:w-auto inline-flex justify-center items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+            onClick={() => { setSelectedBlock(null); setSelectedDate(getColumnDate(currentDayIndex, currentWeekOffset)); setIsModalOpen(true); }}
+            className="w-full sm:w-auto inline-flex justify-center items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
             Add Block
@@ -121,14 +131,6 @@ export function TimetableView() {
         </div>
       </div>
 
-      {/* Alert for overlapping tasks */}
-      <div className="bg-muted border border-border rounded-xl p-4 flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-        <div className="text-sm">
-          <p className="font-medium">Market vs Classes Balance</p>
-          <p className="opacity-90 mt-1">Remember your principle: Online Classes (8:30-5:30) are Primary. Market (9:15-3:30) is Secondary. Set alerts for key levels instead of constant chart watching.</p>
-        </div>
-      </div>
 
       {/* Calendar Grid */}
       <div className="bg-card rounded-xl border border-border overflow-hidden flex flex-col h-[700px] shadow-sm">
@@ -158,16 +160,16 @@ export function TimetableView() {
         </div>
 
         {/* Time Slots */}
-        <div className="flex-1 overflow-y-auto relative" ref={containerRef}>
+        <div className="flex-1 overflow-y-auto relative bg-background" ref={containerRef}>
           <div className={cn(
             "grid min-w-[800px] sm:min-w-0 relative",
             view === 'week' ? "grid-cols-8" : "grid-cols-[80px_1fr]"
           )}>
             {/* Time Column */}
-            <div className="border-r border-border flex flex-col bg-card z-10 sticky left-0">
+            <div className="border-r border-border flex flex-col bg-card z-10 sticky left-0 shadow-[1px_0_2px_rgba(0,0,0,0.05)]">
               {HOURS.map(hour => (
-                <div key={hour} className="h-16 border-b border-border flex items-start justify-center p-2 relative">
-                  <span className="text-xs text-muted-foreground font-medium bg-card px-1 -mt-3">{formatHour(hour)}</span>
+                <div key={hour} className="h-[80px] border-b border-border flex items-start justify-center p-2 relative">
+                  <span className="text-xs text-muted-foreground font-medium bg-card px-1.5 py-0.5 rounded-sm -mt-3 shadow-sm border border-border/50">{formatHour(hour)}</span>
                 </div>
               ))}
             </div>
@@ -187,31 +189,35 @@ export function TimetableView() {
             {(view === 'week' ? DAYS : [DAYS[currentDayIndex]]).map((day, colIdx) => {
               const actualDayIdx = view === 'week' ? colIdx : currentDayIndex;
               const isToday = actualDayIdx === currentDayIndex && currentWeekOffset === 0;
+              const colDate = getColumnDate(actualDayIdx, currentWeekOffset);
+              const storeDayIndex = actualDayIdx === 6 ? 0 : actualDayIdx + 1; // 0 = Sunday
 
               return (
                 <div key={day} className={cn(
                   "border-r border-border last:border-r-0 flex flex-col relative",
-                  isToday ? "bg-primary/[0.02]" : ""
+                  isToday ? "bg-primary/[0.03]" : ""
                 )}>
                   {HOURS.map(hour => (
-                    <div key={hour} className="h-16 border-b border-border hover:bg-accent/40 transition-colors group relative border-dashed border-border/50 cursor-pointer">
+                    <div key={hour} className="h-[80px] border-b border-border hover:bg-accent/30 transition-colors group relative">
+                      {/* Half-hour indicator line */}
+                      <div className="absolute top-1/2 left-0 w-full border-t border-dashed border-border/40 pointer-events-none" />
                       <button 
-                        onClick={() => { setSelectedBlock(null); setIsModalOpen(true); }}
-                        className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 flex items-center justify-center"
+                        onClick={() => { setSelectedBlock(null); setSelectedDate(colDate); setIsModalOpen(true); }}
+                        className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
                       >
-                        <Plus className="w-4 h-4 text-muted-foreground" />
+                        <Plus className="w-5 h-5 text-muted-foreground bg-background rounded-full p-0.5 shadow-sm border border-border" />
                       </button>
                     </div>
                   ))}
 
-                  {timeBlocks.filter(b => b.days.includes(actualDayIdx === 0 ? 0 : actualDayIdx)).map(block => (
+                  {timeBlocks.filter(b => b.date === colDate || (!b.date && b.days.includes(storeDayIndex))).map(block => (
                     <Block 
                       key={block.id}
                       startHour={block.startHour} 
                       durationHours={block.durationHours} 
                       color={block.color} 
                       title={block.title} 
-                      onClick={() => { setSelectedBlock(block); setIsModalOpen(true); }}
+                      onClick={() => { setSelectedBlock(block); setSelectedDate(colDate); setIsModalOpen(true); }}
                     />
                   ))}
                 </div>
@@ -220,14 +226,14 @@ export function TimetableView() {
           </div>
         </div>
       </div>
-      <TimeBlockModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} block={selectedBlock} />
+      <TimeBlockModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} block={selectedBlock} selectedDate={selectedDate} />
     </div>
   );
 }
 
 function Block({ startHour, durationHours, color, title, className = '', onClick }: { startHour: number, durationHours: number, color: string, title: string, className?: string, onClick?: () => void }) {
-  const topOffset = (startHour - 6) * 64; // 64px per hour (h-16)
-  const height = durationHours * 64;
+  const topOffset = (startHour - 8) * 80; // 80px per hour
+  const height = durationHours * 80;
   
   return (
     <div 
