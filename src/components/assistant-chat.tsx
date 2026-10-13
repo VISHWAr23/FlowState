@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,22 +18,33 @@ export function AssistantChat() {
   const { data: tasks } = useTasks(getToday());
   const { data: habits } = useHabits();
   
-  // Prepare context string
-  const contextString = `
-Pending Tasks for Today:
-${tasks?.filter(t => t.status !== 'completed').map(t => `- ${t.title} (Priority: ${t.priority})`).join('\n') || 'No pending tasks.'}
+  // Memoize context string to prevent unnecessary garbage collection & rerenders
+  const contextString = useMemo(() => {
+    const pendingTasksStr = tasks
+      ?.filter((t) => t.status !== 'completed')
+      .map((t) => `- ${t.title} (Priority: ${t.priority})`)
+      .join('\n') || 'No pending tasks.';
 
-Active Habits:
-${habits?.map(h => `- ${h.title} (Target: ${h.target_duration_minutes ? h.target_duration_minutes + ' min' : 'completion'})`).join('\n') || 'No active habits.'}
-  `.trim();
+    const habitsStr = habits
+      ?.map((h) => `- ${h.title} (Target: ${h.target_duration_minutes ? h.target_duration_minutes + ' min' : 'completion'})`)
+      .join('\n') || 'No active habits.';
+
+    return `Pending Tasks for Today:\n${pendingTasksStr}\n\nActive Habits:\n${habitsStr}`.trim();
+  }, [tasks, habits]);
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: '/api/chat',
+        body: {
+          context: contextString,
+        },
+      }),
+    [contextString]
+  );
 
   const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({
-      api: '/api/chat',
-      body: {
-        context: contextString,
-      },
-    }),
+    transport,
     messages: [
       {
         id: 'welcome',

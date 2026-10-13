@@ -17,9 +17,11 @@ import {
   Zap,
   ChevronLeft,
   MoreHorizontal,
+  LineChart,
+  LogOut,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
-import { useAuth } from '@/hooks';
+import { useAuth, useLogout } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { QuickCapture } from './quick-capture';
 import { AssistantChat } from './assistant-chat';
@@ -34,6 +36,7 @@ const secondaryNavItems = [
   { href: '/timetable', label: 'Timetable', icon: Clock },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/habits', label: 'Habits', icon: Repeat },
+  { href: '/market', label: 'Market Protocol', icon: LineChart },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -44,6 +47,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const pathname = usePathname();
+
+  // On authentication pages, render clean centered content without dashboard chrome
+  if (pathname === '/login' || pathname === '/signup') {
+    return <main className="min-h-screen bg-[#0B0D0F]">{children}</main>;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -94,12 +102,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-                <Zap className="w-3.5 h-3.5 text-primary-foreground" />
-              </div>
-              <span className="font-semibold text-base tracking-tight">FlowState</span>
-            </div>
+            <Link href="/" className="flex items-center gap-2">
+              <img
+                src="/brand/flowstate-logo.png"
+                alt="FlowState"
+                className="h-8 w-auto max-h-8 object-contain"
+              />
+            </Link>
             <div className="w-9" />
           </div>
         </header>
@@ -210,19 +219,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 function SidebarContent({ user, onNavigate }: { user?: any; onNavigate?: () => void }) {
   const pathname = usePathname();
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
+  const logout = useLogout();
 
   return (
     <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className="p-6 border-b border-border flex items-center justify-between">
+      {/* Brand Logo */}
+      <div className="p-5 border-b border-border flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3" onClick={onNavigate}>
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-sm">
-            <Zap className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="font-bold text-lg tracking-tight">FlowState</h1>
-            <p className="text-xs text-muted-foreground">Focus · Execute · Review</p>
-          </div>
+          <img
+            src="/brand/flowstate-logo.png"
+            alt="FlowState"
+            className="h-10 w-auto max-h-10 object-contain"
+          />
         </Link>
         <button
           onClick={toggleSidebar}
@@ -292,19 +300,33 @@ function SidebarContent({ user, onNavigate }: { user?: any; onNavigate?: () => v
         </div>
       </div>
 
-      {/* User Profile */}
+      {/* User Profile & Clear Logout Action */}
       {user && (
         <div className="p-4 border-t border-border bg-card">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <span className="text-xs font-bold text-primary">
-                {user.full_name?.charAt(0) || user.username?.charAt(0) || 'U'}
-              </span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-full bg-[#C8A96B]/15 border border-[#C8A96B]/30 flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-bold text-[#C8A96B]">
+                  {(user.full_name?.charAt(0) || user.username?.charAt(0) || 'U').toUpperCase()}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate leading-tight">
+                  {user.full_name || user.username}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  @{user.username || 'user'} · Lvl {user.level || 1}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate leading-tight">{user.full_name || user.username}</p>
-              <p className="text-xs text-muted-foreground truncate">Level {user.level || 1} · {user.xp || 0} XP</p>
-            </div>
+            <button
+              onClick={logout}
+              className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}

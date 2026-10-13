@@ -43,16 +43,14 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
         priority,
         estimated_minutes: estimatedMinutes,
       }
-    }, {
-      onSuccess: () => onClose()
     });
+    onClose();
   };
 
   const handleDelete = () => {
     if (confirm('Are you sure you want to remove this priority?')) {
-      deleteTask.mutate(task.id, {
-        onSuccess: () => onClose()
-      });
+      deleteTask.mutate(task.id);
+      onClose();
     }
   };
 

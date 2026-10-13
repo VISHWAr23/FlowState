@@ -141,33 +141,36 @@ export function FocusTimer() {
     addToast({ type: 'success', title: 'Focus session completed!' });
   };
 
-  const handleStart = async () => {
+  const handleStart = () => {
     // Prevent overlapping sessions
     if (isActive) return;
 
-    const session = await startSession.mutateAsync({
+    const newSessionId = `session-${Date.now()}`;
+    const startedAt = new Date().toISOString();
+
+    setFocusTimerState({
+      focusSessionId: newSessionId,
+      focusTimerActive: true,
+      focusTimerPaused: false,
+      focusStartedAt: Date.now(),
+      focusElapsedBeforePause: 0,
+    });
+    setNow(Date.now());
+    setFiveMinuteExtended(false);
+
+    startSession.mutate({
+      id: newSessionId,
       task_id: selectedTaskId || null,
       life_area_id: linkedTask?.life_area_id || null,
       planned_duration: selectedDuration,
-      started_at: new Date().toISOString(),
+      started_at: startedAt,
     });
 
-    if (session) {
-      setFocusTimerState({
-        focusSessionId: session.id,
-        focusTimerActive: true,
-        focusTimerPaused: false,
-        focusStartedAt: Date.now(),
-        focusElapsedBeforePause: 0,
-      });
-      setNow(Date.now());
-      setFiveMinuteExtended(false);
-      addToast({
-        type: 'info',
-        title: 'Focus session active',
-        description: `${selectedDuration} minutes of undisturbed work`,
-      });
-    }
+    addToast({
+      type: 'info',
+      title: 'Focus session active',
+      description: `${selectedDuration} minutes of undisturbed work`,
+    });
   };
 
   const handlePauseToggle = () => {
@@ -195,10 +198,10 @@ export function FocusTimer() {
   };
 
   // Discard / Cancel session
-  const handleConfirmCancel = async () => {
+  const handleConfirmCancel = () => {
     if (sessionId) {
       const actualMinutes = Math.floor(elapsed / 60);
-      await endSession.mutateAsync({
+      endSession.mutate({
         id: sessionId,
         updates: {
           ended_at: new Date().toISOString(),
@@ -213,12 +216,12 @@ export function FocusTimer() {
   };
 
   // Save completed session rating and reflections
-  const handleSaveCompletedSession = async () => {
+  const handleSaveCompletedSession = () => {
     const actualSeconds = selectedDuration * 60 - timeLeft;
     const actualMinutes = Math.max(1, Math.round(actualSeconds / 60));
 
     if (sessionId) {
-      await endSession.mutateAsync({
+      endSession.mutate({
         id: sessionId,
         updates: {
           ended_at: new Date().toISOString(),
@@ -234,7 +237,7 @@ export function FocusTimer() {
 
     // Complete linked task if requested
     if (markTaskCompleteOnSave && selectedTaskId) {
-      completeTask.mutate({ id: selectedTaskId, xpReward: 25 });
+      completeTask.mutate({ id: selectedTaskId, xpReward: 25, status: 'completed' });
     }
 
     setShowRating(false);

@@ -96,22 +96,23 @@ export function DailyExecution() {
   };
 
   const handleTaskComplete = (task: Task) => {
-    if (task.status === 'completed') return;
-    const xp = PRIORITY_CONFIG[task.priority as Priority]?.value * 10 || 10;
-    completeTask.mutate({ id: task.id, xpReward: xp });
+    if (task.status === 'completed') {
+      completeTask.mutate({ id: task.id, status: 'pending' });
+    } else {
+      const xp = PRIORITY_CONFIG[task.priority as Priority]?.value * 10 || 10;
+      completeTask.mutate({ id: task.id, xpReward: xp, status: 'completed' });
+    }
   };
 
   const handleAddTask = () => {
     if (!newTaskInput.trim()) return;
+    const title = newTaskInput.trim();
+    setNewTaskInput('');
     createTask.mutate({
-      title: newTaskInput,
+      title,
       priority: 'medium',
       due_date: selectedDate,
       status: 'pending',
-    }, {
-      onSuccess: () => {
-        setNewTaskInput('');
-      }
     });
   };
 

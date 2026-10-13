@@ -6,6 +6,7 @@ import { Flame, Plus, Repeat, TrendingUp, Edit2 } from 'lucide-react';
 import { useHabits, useCompleteHabit, useHabitLogs } from '@/hooks';
 import { useAuth } from '@/hooks';
 import { cn, getToday } from '@/lib/utils';
+import { useAppStore } from '@/lib/store';
 import { HabitModal } from './modals/habit-modal';
 import type { Habit } from '@/types';
 
@@ -13,6 +14,7 @@ export function HabitGrid() {
   const { data: habits, isLoading } = useHabits();
   const { data: user } = useAuth();
   const completeHabit = useCompleteHabit();
+  const dailyScores = useAppStore((state) => state.dailyScores);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedHabit, setSelectedHabit] = useState<Habit | null>(null);
@@ -35,6 +37,8 @@ export function HabitGrid() {
     if (h.frequency === 'specific_days') return h.specific_days.includes(adjustedDay);
     return true;
   }) || [];
+
+  const completedTodayCount = todayHabits.filter(h => !!dailyScores[today]?.[`habit_${h.id}`]).length;
 
   return (
     <div className="space-y-8">
@@ -64,7 +68,7 @@ export function HabitGrid() {
         />
         <StatCard
           label="Completed"
-          value={String(todayHabits.filter(h => h.streak_current > 0).length)}
+          value={String(completedTodayCount)}
           icon={TrendingUp}
           color="text-green-500"
         />
@@ -116,8 +120,9 @@ function HabitCard({ habit, userId, onToggle, onEdit, delay }: {
   onEdit: () => void;
   delay: number;
 }) {
+  const isCompletedFromStore = useAppStore((state) => !!state.dailyScores[getToday()]?.[`habit_${habit.id}`]);
   const { data: log } = useHabitLogs(habit.id);
-  const isCompleted = !!log;
+  const isCompleted = isCompletedFromStore || !!log;
 
   return (
     <motion.div

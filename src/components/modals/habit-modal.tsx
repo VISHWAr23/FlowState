@@ -42,7 +42,8 @@ export function HabitModal({ isOpen, onClose, habit }: HabitModalProps) {
       updateHabit.mutate({
         id: habit.id,
         updates: { title, frequency, color }
-      }, { onSuccess: () => onClose() });
+      });
+      onClose();
     } else {
       createHabit.mutate({
         title,
@@ -57,15 +58,15 @@ export function HabitModal({ isOpen, onClose, habit }: HabitModalProps) {
         sort_order: 0,
         specific_days: [1, 2, 3, 4, 5, 6, 7],
         time_of_day: 'anytime',
-      }, { onSuccess: () => onClose() });
+      });
+      onClose();
     }
   };
 
   const handleDelete = () => {
     if (habit && confirm('Are you sure you want to delete this habit?')) {
-      deleteHabit.mutate(habit.id, {
-        onSuccess: () => onClose()
-      });
+      deleteHabit.mutate(habit.id);
+      onClose();
     }
   };
 

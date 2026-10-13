@@ -23,18 +23,16 @@ export function QuickCapture() {
     e.preventDefault();
     if (!input.trim()) return;
 
+    const taskTitle = input.trim();
+    setInput('');
+    setIsOpen(false);
+
     createTask.mutate({
-      title: input,
+      title: taskTitle,
       priority: priority as "low" | "medium" | "high" | "urgent",
       life_area_id: areaId || null,
       due_date: dueDate,
       status: 'pending',
-    }, {
-      onSuccess: () => {
-        setInput('');
-        setIsOpen(false);
-        addToast({ type: 'success', title: 'Task captured!' });
-      }
     });
   };
 

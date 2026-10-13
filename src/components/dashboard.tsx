@@ -117,14 +117,14 @@ export function Dashboard() {
         .slice(0, 3)
     : [];
 
+  const dailyScores = useAppStore((state) => state.dailyScores);
+
   const handleTaskToggle = (task: Task) => {
     if (task.status === 'completed') {
-      // Toggle back to pending
-      useAppStore.getState().updateTask(task.id, { status: 'pending', completed_at: null });
-      addToast({ type: 'info', title: 'Task restored to pending' });
+      completeTask.mutate({ id: task.id, status: 'pending' });
     } else {
       const priorityXP: Record<string, number> = { urgent: 40, high: 30, medium: 20, low: 10 };
-      completeTask.mutate({ id: task.id, xpReward: priorityXP[task.priority] || 20 });
+      completeTask.mutate({ id: task.id, xpReward: priorityXP[task.priority] || 20, status: 'completed' });
     }
   };
 
@@ -558,7 +558,7 @@ export function Dashboard() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {habits.slice(0, 6).map((habit) => {
-              const isDone = (habit.streak_current || 0) > 0;
+              const isDone = !!dailyScores[todayStr]?.[`habit_${habit.id}`];
               return (
                 <div
                   key={habit.id}

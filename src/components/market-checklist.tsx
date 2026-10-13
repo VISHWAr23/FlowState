@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { LineChart, CheckCircle2, Circle, AlertTriangle, Save, Sunrise, Sun, Sunset } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, getToday } from '@/lib/utils';
+import { useAppStore } from '@/lib/store';
 
 interface CheckItem {
   id: string;
@@ -32,17 +33,52 @@ const INITIAL_CHECKLISTS = {
   ]
 };
 
-export function MarketChecklist() {
-  const [checklists, setChecklists] = useState(INITIAL_CHECKLISTS);
-  const [journal, setJournal] = useState('');
+type ChecklistState = typeof INITIAL_CHECKLISTS;
 
-  const toggleCheck = (phase: keyof typeof INITIAL_CHECKLISTS, id: string) => {
-    setChecklists(prev => ({
-      ...prev,
-      [phase]: prev[phase].map(item => 
-        item.id === id ? { ...item, completed: !item.completed } : item
-      )
-    }));
+export function MarketChecklist() {
+  const addToast = useAppStore((state) => state.addToast);
+  const today = getToday();
+
+  const [checklists, setChecklists] = useState<ChecklistState>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(`flowstate-market-${today}`);
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return INITIAL_CHECKLISTS;
+  });
+
+  const [journal, setJournal] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(`flowstate-journal-${today}`);
+        if (saved) return saved;
+      } catch {}
+    }
+    return '';
+  });
+
+  const toggleCheck = (phase: keyof ChecklistState, id: string) => {
+    setChecklists((prev: ChecklistState) => {
+      const next = {
+        ...prev,
+        [phase]: prev[phase].map((item) => 
+          item.id === id ? { ...item, completed: !item.completed } : item
+        )
+      };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`flowstate-market-${today}`, JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  const handleSaveJournal = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`flowstate-journal-${today}`, journal);
+    }
+    addToast({ type: 'success', title: 'Journal saved successfully' });
   };
 
   const calculateProgress = (phase: keyof typeof INITIAL_CHECKLISTS) => {
@@ -120,7 +156,10 @@ export function MarketChecklist() {
               placeholder="The market moved because..."
               className="w-full h-64 p-3 rounded-lg bg-accent/50 border-none outline-none resize-none focus:ring-2 focus:ring-primary/50 text-sm"
             />
-            <button className="w-full mt-4 bg-primary text-primary-foreground py-2.5 rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2">
+            <button
+              onClick={handleSaveJournal}
+              className="w-full mt-4 bg-primary text-primary-foreground py-2.5 rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+            >
               <Save className="w-4 h-4" />
               Save Journal
             </button>

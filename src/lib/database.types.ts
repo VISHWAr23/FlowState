@@ -34,6 +34,7 @@ export interface Database {
           weekly_review_day: number;
           morning_reminder: string | null;
           evening_reminder: string | null;
+          password_hash: string | null;
         };
         Insert: Record<string, any> & { id: string };
         Update: Record<string, any>;

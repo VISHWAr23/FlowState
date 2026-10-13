@@ -317,22 +317,13 @@ function GoalModal({ onClose, areas, goal }: { onClose: () => void; areas: any[]
       key_results: keyResults.filter(kr => kr.title) as any,
     };
 
+    onClose();
     if (goal) {
-      updateGoal.mutate({ id: goal.id, updates: goalData }, {
-        onSuccess: () => {
-          onClose();
-          addToast({ type: 'success', title: 'Goal updated successfully' });
-        }
-      });
+      updateGoal.mutate({ id: goal.id, updates: goalData });
     } else {
       createGoal.mutate({
         ...goalData,
         start_date: new Date().toISOString().split('T')[0],
-      }, {
-        onSuccess: () => {
-          onClose();
-          addToast({ type: 'success', title: 'Goal created successfully' });
-        }
       });
     }
   };

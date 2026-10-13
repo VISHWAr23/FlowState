@@ -15,6 +15,7 @@ interface AppState {
   // Auth
   user: Profile | null;
   setUser: (user: Profile | null) => void;
+  resetUserStore: () => void;
 
   // UI State
   sidebarOpen: boolean;
@@ -117,26 +118,26 @@ interface Toast {
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      user: {
-        id: '11111111-1111-1111-1111-111111111111',
-        username: 'FlowState User',
-        full_name: 'FlowState Focused Member',
-        avatar_url: null,
-        timezone: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC',
-        preferred_language: 'en',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        level: 1,
-        xp: 0,
-        total_focus_minutes: 0,
-        current_streak: 1,
-        longest_streak: 1,
-        daily_xp_cap: 1000,
-        weekly_review_day: 0,
-        morning_reminder: '08:00',
-        evening_reminder: '20:00',
-      } as Profile,
+      user: null,
       setUser: (user) => set({ user }),
+      resetUserStore: () =>
+        set({
+          user: null,
+          tasks: [],
+          habits: [],
+          goals: [],
+          focusSessions: [],
+          dailyLogs: {},
+          timeBlocks: [],
+          dailyScores: {},
+          interruptionNotes: [],
+          focusTimerActive: false,
+          focusTimerPaused: false,
+          focusSessionId: null,
+          focusSelectedTask: null,
+          activeFocusSession: null,
+          isFocusMode: false,
+        }),
 
       sidebarOpen: true,
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
