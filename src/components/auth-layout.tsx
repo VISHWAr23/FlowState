@@ -95,8 +95,8 @@ export function AuthLayout({ mode, children }: AuthLayoutProps) {
                 onClick={() => handleTabChange('login')}
                 className={`relative z-20 w-full h-[46px] flex items-center pl-7 text-left transition-colors duration-200 cursor-pointer ${
                   mode === 'login'
-                    ? 'text-[#C8A96B] font-extrabold'
-                    : 'text-[#929292] hover:text-[#F5F1E8] font-bold'
+                    ? 'text-white font-extrabold'
+                    : 'text-white/90 hover:text-white font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.85)]'
                 }`}
               >
                 <span className="text-xs tracking-[0.2em] uppercase leading-none">
@@ -110,8 +110,8 @@ export function AuthLayout({ mode, children }: AuthLayoutProps) {
                 onClick={() => handleTabChange('signup')}
                 className={`relative z-20 w-full h-[46px] flex items-center pl-7 text-left transition-colors duration-200 cursor-pointer ${
                   mode === 'signup'
-                    ? 'text-[#C8A96B] font-extrabold'
-                    : 'text-[#929292] hover:text-[#F5F1E8] font-bold'
+                    ? 'text-white font-extrabold'
+                    : 'text-white/90 hover:text-white font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.85)]'
                 }`}
               >
                 <span className="text-xs tracking-[0.2em] uppercase leading-none">
@@ -128,8 +128,8 @@ export function AuthLayout({ mode, children }: AuthLayoutProps) {
               onClick={() => handleTabChange('login')}
               className={`px-5 py-2 rounded-full text-xs font-extrabold tracking-wider transition-all cursor-pointer ${
                 mode === 'login'
-                  ? 'bg-[#C8A96B] text-[#0B0D0F] shadow-md'
-                  : 'text-[#929292] hover:text-[#F5F1E8]'
+                  ? 'bg-white text-[#0B0D0F] shadow-md'
+                  : 'text-white hover:text-white/80 drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]'
               }`}
             >
               LOGIN
@@ -139,8 +139,8 @@ export function AuthLayout({ mode, children }: AuthLayoutProps) {
               onClick={() => handleTabChange('signup')}
               className={`px-5 py-2 rounded-full text-xs font-extrabold tracking-wider transition-all cursor-pointer ${
                 mode === 'signup'
-                  ? 'bg-[#C8A96B] text-[#0B0D0F] shadow-md'
-                  : 'text-[#929292] hover:text-[#F5F1E8]'
+                  ? 'bg-white text-[#0B0D0F] shadow-md'
+                  : 'text-white hover:text-white/80 drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]'
               }`}
             >
               SIGN UP
@@ -163,7 +163,7 @@ export function AuthLayout({ mode, children }: AuthLayoutProps) {
               />
             </Link>
 
-            <h1 className="text-base sm:text-lg font-extrabold tracking-[0.25em] text-[#F5F1E8] mt-2 uppercase">
+            <h1 className="text-base sm:text-lg font-extrabold tracking-[0.25em] text-white mt-2 uppercase">
               {mode === 'login' ? 'LOGIN' : 'SIGN UP'}
             </h1>
           </div>

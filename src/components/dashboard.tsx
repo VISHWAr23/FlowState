@@ -20,6 +20,8 @@ import {
   Check,
   Award,
   ChevronRight,
+  LogOut,
+  History,
 } from 'lucide-react';
 import {
   useTasks,
@@ -28,6 +30,7 @@ import {
   useFocusSessions,
   useDailyLog,
   useAuth,
+  useLogout,
   useCompleteTask,
   useCreateTask,
   useDeleteTask,
@@ -42,6 +45,7 @@ import Link from 'next/link';
 export function Dashboard() {
   const router = useRouter();
   const { data: user } = useAuth();
+  const logout = useLogout();
   const { data: tasks, isLoading: tasksLoading } = useTasks();
   const { data: habits } = useHabits();
   const { data: sessions } = useFocusSessions();
@@ -61,7 +65,11 @@ export function Dashboard() {
   const [inlinePriority, setInlinePriority] = useState<Priority>('high');
   const [selectedTaskForModal, setSelectedTaskForModal] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [taskTab, setTaskTab] = useState<'priorities' | 'history'>('priorities');
+  const [historyScope, setHistoryScope] = useState<'today' | 'all'>('today');
   const inlineInputRef = useRef<HTMLInputElement>(null);
+
+  const allStoreTasks = useAppStore((state) => state.tasks);
 
   // Time and Greeting
   const todayStr = getToday();
@@ -79,6 +87,18 @@ export function Dashboard() {
   const totalTasks = tasks?.length || 0;
   const pendingTasks = tasks?.filter((t) => t.status !== 'completed') || [];
   const taskRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  // Task history collections
+  const allTasksPool = allStoreTasks && allStoreTasks.length > 0 ? allStoreTasks : (tasks || []);
+  const todayCompletedTasks = (tasks || []).filter((t) => t.status === 'completed');
+  const allCompletedTasks = allTasksPool
+    .filter((t) => t.status === 'completed')
+    .sort((a, b) => {
+      const timeA = a.completed_at ? new Date(a.completed_at).getTime() : 0;
+      const timeB = b.completed_at ? new Date(b.completed_at).getTime() : 0;
+      return timeB - timeA;
+    });
+  const displayedCompletedTasks = historyScope === 'today' ? todayCompletedTasks : allCompletedTasks;
 
   // Real focus minutes from completed sessions
   const completedSessions = sessions?.filter((s) => s.status === 'completed') || [];
@@ -163,8 +183,8 @@ export function Dashboard() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
             Good {getTimeOfDay()},{' '}
-            <span className="text-primary font-semibold">
-              {user?.full_name?.split(' ')[0] || user?.username || 'Champion'}
+            <span className="text-[#C8A96B] font-extrabold">
+              {user?.full_name ? user.full_name.split(' ')[0] : (user?.username || 'Champion')}
             </span>
           </h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1 font-medium">
@@ -172,20 +192,50 @@ export function Dashboard() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Personalized User Profile Badge */}
+          <Link
+            href="/profile"
+            className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-accent hover:border-[#C8A96B]/40 transition-all cursor-pointer group"
+            title="Profile & Settings"
+          >
+            <div className="w-7 h-7 rounded-full bg-[#C8A96B]/15 border border-[#C8A96B]/30 flex items-center justify-center text-xs font-bold text-[#C8A96B] group-hover:border-[#C8A96B] transition-colors">
+              {(user?.full_name?.charAt(0) || user?.username?.charAt(0) || 'U').toUpperCase()}
+            </div>
+            <div className="text-left">
+              <p className="text-xs font-bold text-foreground leading-tight truncate max-w-[130px] group-hover:text-primary transition-colors">
+                {user?.full_name || user?.username || 'FlowState User'}
+              </p>
+              <p className="text-[10px] text-muted-foreground font-mono leading-none">
+                @{user?.username || 'user'}
+              </p>
+            </div>
+          </Link>
+
+          {/* Explicit Logout Button */}
+          <button
+            onClick={logout}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border hover:border-destructive/20 transition-all cursor-pointer"
+            title="Sign out of FlowState"
+            aria-label="Sign out"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Logout</span>
+          </button>
+
           <Link
             href="/focus"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-accent hover:bg-accent/80 text-foreground transition-all"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-accent hover:bg-accent/80 text-foreground transition-all"
           >
             <Timer className="w-4 h-4 text-primary" />
             <span>Focus Room</span>
           </Link>
           <Link
             href="/analytics"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-accent hover:bg-accent/80 text-foreground transition-all"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-accent hover:bg-accent/80 text-foreground transition-all"
           >
             <span>Review</span>
-            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
           </Link>
         </div>
       </div>
@@ -279,149 +329,302 @@ export function Dashboard() {
         </div>
       )}
 
-      {/* 4. Top 3 Priorities for the Day */}
+      {/* 4. Priorities & Daily Task History */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-foreground">Today&apos;s Priorities</h2>
-            <p className="text-xs text-muted-foreground">Focus on maximum 3 critical tasks</p>
+            <h2 className="text-lg font-bold text-foreground">
+              {taskTab === 'priorities' ? "Today's Priorities" : "Daily Task History"}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {taskTab === 'priorities'
+                ? "Focus on high-impact priorities to drive execution"
+                : "Review completed priorities, logged momentum, and timestamps"}
+            </p>
           </div>
-          <span className="text-xs font-semibold px-2 py-1 bg-accent text-muted-foreground rounded-lg">
-            {completedTasks} of {totalTasks} done
-          </span>
-        </div>
 
-        {/* Priority List Cards */}
-        <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border shadow-sm">
-          {topPriorities.length > 0 ? (
-            topPriorities.map((task) => {
-              const isCompleted = task.status === 'completed';
-              return (
-                <div
-                  key={task.id}
-                  className={cn(
-                    "flex items-center justify-between p-4 transition-colors hover:bg-accent/40",
-                    isCompleted && "bg-muted/30 opacity-70"
-                  )}
-                >
-                  <div className="flex items-center gap-3.5 flex-1 min-w-0">
-                    <button
-                      onClick={() => handleTaskToggle(task)}
-                      className={cn(
-                        "w-5 h-5 rounded-md border flex items-center justify-center transition-all cursor-pointer flex-shrink-0",
-                        isCompleted
-                          ? "bg-primary border-primary text-primary-foreground"
-                          : "border-muted-foreground hover:border-primary"
-                      )}
-                    >
-                      {isCompleted ? (
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      ) : (
-                        <span className="w-1.5 h-1.5 rounded-full bg-transparent" />
-                      )}
-                    </button>
-
-                    <div className="flex-1 min-w-0">
-                      <p className={cn("text-sm font-semibold text-foreground truncate", isCompleted && "line-through text-muted-foreground")}>
-                        {task.title}
-                      </p>
-                      {(task.notes || task.description) && (
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                          {task.notes || task.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 ml-3 flex-shrink-0">
-                    <PriorityDot priority={task.priority} />
-                    {!isCompleted && (
-                      <button
-                        onClick={() => handleStartFocus(task)}
-                        className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors cursor-pointer"
-                        title="Start focus on this task"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setSelectedTaskForModal(task);
-                        setIsTaskModalOpen(true);
-                      }}
-                      className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors cursor-pointer"
-                      title="Edit task"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm('Delete this task?')) {
-                          deleteTask.mutate(task.id);
-                        }
-                      }}
-                      className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                      title="Delete task"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="p-8 text-center space-y-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
-                <Target className="w-5 h-5" />
-              </div>
-              <p className="text-sm font-medium text-foreground">Start with one small task.</p>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                No active priorities for today. Define what really matters to set your day up for clarity.
-              </p>
+          <div className="flex items-center gap-2">
+            {/* View Switcher: Active Priorities vs Task History */}
+            <div className="flex items-center p-1 bg-accent/70 rounded-xl border border-border">
               <button
-                onClick={() => inlineInputRef.current?.focus()}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:bg-primary/90 transition-colors cursor-pointer shadow-sm"
+                type="button"
+                onClick={() => setTaskTab('priorities')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                  taskTab === 'priorities'
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
               >
-                <Plus className="w-3.5 h-3.5" />
-                Add your first task
+                <Target className="w-3.5 h-3.5 text-primary" />
+                <span>Active</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
+                  {pendingTasks.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTaskTab('history')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                  taskTab === 'history'
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Task History</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-500 font-bold">
+                  {completedTasks}
+                </span>
               </button>
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Inline Quick-Add Task Input */}
-        <form onSubmit={handleInlineAddTask} className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <input
-              ref={inlineInputRef}
-              type="text"
-              value={inlineTaskTitle}
-              onChange={(e) => setInlineTaskTitle(e.target.value)}
-              placeholder="+ Add a priority for today... (Press Enter)"
-              className="w-full pl-3.5 pr-20 py-2.5 bg-card border border-border rounded-xl text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            />
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-              <select
-                value={inlinePriority}
-                onChange={(e) => setInlinePriority(e.target.value as Priority)}
-                className="bg-accent text-foreground text-xs font-medium rounded-lg px-2 py-1 border border-border focus:outline-none cursor-pointer"
-                title="Priority"
+        {taskTab === 'priorities' ? (
+          <>
+            {/* Priority List Cards */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border shadow-sm">
+              {topPriorities.length > 0 ? (
+                topPriorities.map((task) => {
+                  const isCompleted = task.status === 'completed';
+                  return (
+                    <div
+                      key={task.id}
+                      className={cn(
+                        "flex items-center justify-between p-4 transition-colors hover:bg-accent/40",
+                        isCompleted && "bg-muted/30 opacity-70"
+                      )}
+                    >
+                      <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                        <button
+                          onClick={() => handleTaskToggle(task)}
+                          className={cn(
+                            "w-5 h-5 rounded-md border flex items-center justify-center transition-all cursor-pointer flex-shrink-0",
+                            isCompleted
+                              ? "bg-primary border-primary text-primary-foreground"
+                              : "border-muted-foreground hover:border-primary"
+                          )}
+                          title={isCompleted ? "Restore to pending" : "Mark as completed"}
+                        >
+                          {isCompleted ? (
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          ) : (
+                            <span className="w-1.5 h-1.5 rounded-full bg-transparent" />
+                          )}
+                        </button>
+
+                        <div className="flex-1 min-w-0">
+                          <p className={cn("text-sm font-semibold text-foreground truncate", isCompleted && "line-through text-muted-foreground")}>
+                            {task.title}
+                          </p>
+                          {(task.notes || task.description) && (
+                            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                              {task.notes || task.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                        <PriorityDot priority={task.priority} />
+                        {!isCompleted && (
+                          <button
+                            onClick={() => handleStartFocus(task)}
+                            className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-colors cursor-pointer"
+                            title="Start focus on this task"
+                          >
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setSelectedTaskForModal(task);
+                            setIsTaskModalOpen(true);
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                          title="Edit task"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('Delete this task?')) {
+                              deleteTask.mutate(task.id);
+                            }
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                          title="Delete task"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-8 text-center space-y-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+                    <Target className="w-5 h-5" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">Start with one small task.</p>
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                    No active priorities for today. Define what really matters to set your day up for clarity.
+                  </p>
+                  <button
+                    onClick={() => inlineInputRef.current?.focus()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:bg-primary/90 transition-colors cursor-pointer shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add your first task
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Inline Quick-Add Task Input */}
+            <form onSubmit={handleInlineAddTask} className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  ref={inlineInputRef}
+                  type="text"
+                  value={inlineTaskTitle}
+                  onChange={(e) => setInlineTaskTitle(e.target.value)}
+                  placeholder="+ Add a priority for today... (Press Enter)"
+                  className="w-full pl-3.5 pr-20 py-2.5 bg-card border border-border rounded-xl text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  <select
+                    value={inlinePriority}
+                    onChange={(e) => setInlinePriority(e.target.value as Priority)}
+                    className="bg-accent text-foreground text-xs font-medium rounded-lg px-2 py-1 border border-border focus:outline-none cursor-pointer"
+                    title="Priority"
+                  >
+                    <option value="urgent">Urgent</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={!inlineTaskTitle.trim()}
+                className="px-4 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex-shrink-0"
               >
-                <option value="urgent">Urgent</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
+                Add
+              </button>
+            </form>
+          </>
+        ) : (
+          /* Task History View */
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold">
+                <span className="text-muted-foreground">Filter History:</span>
+                <button
+                  type="button"
+                  onClick={() => setHistoryScope('today')}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg transition-colors cursor-pointer",
+                    historyScope === 'today'
+                      ? "bg-primary text-primary-foreground font-bold"
+                      : "bg-accent/80 text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Today ({todayCompletedTasks.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryScope('all')}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg transition-colors cursor-pointer",
+                    historyScope === 'all'
+                      ? "bg-primary text-primary-foreground font-bold"
+                      : "bg-accent/80 text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  All History ({allCompletedTasks.length})
+                </button>
+              </div>
+
+              <span className="text-xs text-muted-foreground">
+                Click checkmark to restore
+              </span>
+            </div>
+
+            <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border shadow-sm">
+              {displayedCompletedTasks.length > 0 ? (
+                displayedCompletedTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="flex items-center justify-between p-4 transition-colors hover:bg-accent/30 bg-card"
+                  >
+                    <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                      <button
+                        onClick={() => handleTaskToggle(task)}
+                        className="w-5 h-5 rounded-md bg-emerald-500 border border-emerald-500 text-white flex items-center justify-center transition-all cursor-pointer flex-shrink-0 hover:bg-emerald-600"
+                        title="Click to restore to active priorities"
+                      >
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </button>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate line-through opacity-85">
+                          {task.title}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
+                          {task.completed_at ? (
+                            <span>
+                              Completed {new Date(task.completed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          ) : (
+                            <span>Completed</span>
+                          )}
+                          {task.due_date && <span>· Due {task.due_date}</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                      <PriorityDot priority={task.priority} />
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#C8A96B]/15 text-[#C8A96B] border border-[#C8A96B]/20">
+                        +{task.xp_reward || 20} XP
+                      </span>
+                      <button
+                        onClick={() => {
+                          if (confirm('Delete this history record?')) {
+                            deleteTask.mutate(task.id);
+                          }
+                        }}
+                        className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                        title="Delete task from history"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center space-y-2">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mx-auto">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">
+                    {historyScope === 'today'
+                      ? 'No tasks completed yet today'
+                      : 'No task completion history recorded yet'}
+                  </p>
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                    Complete your daily priorities to log them into your execution history.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
-          <button
-            type="submit"
-            disabled={!inlineTaskTitle.trim()}
-            className="px-4 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex-shrink-0"
-          >
-            Add
-          </button>
-        </form>
+        )}
       </div>
 
       {/* 5. Minimum Successful Day Card */}

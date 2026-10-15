@@ -13,6 +13,12 @@ const signupSchema = z
       .min(3, 'Username must be at least 3 characters')
       .max(30, 'Username must be at most 30 characters')
       .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores'),
+    email: z
+      .string()
+      .trim()
+      .email('Please enter a valid email address')
+      .optional()
+      .or(z.literal('')),
     password: z
       .string()
       .min(8, 'Password must be at least 8 characters')
@@ -27,7 +33,7 @@ const signupSchema = z
 export async function POST(req: Request) {
   // Rate limiting by client IP
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'local-client';
-  const rateLimit = checkRateLimit(`signup:${ip}`, { limit: 10, windowMs: 60 * 1000 });
+  const rateLimit = checkRateLimit(`signup:${ip}`, { limit: 20, windowMs: 60 * 1000 });
   if (!rateLimit.success) {
     return NextResponse.json(
       { error: 'Too many registration attempts. Please try again in a minute.' },
@@ -48,7 +54,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { name, username, password } = result.data;
+    const { name, username, email, password } = result.data;
 
     // Check if username is already taken (case-insensitively)
     const existing = findUserByUsername(username);
@@ -66,6 +72,7 @@ export async function POST(req: Request) {
     const newUser = createUser({
       name,
       username,
+      email: email || undefined,
       password,
     });
 
@@ -90,6 +97,15 @@ export async function POST(req: Request) {
         {
           error: 'Username is already taken',
           fieldErrors: { username: ['Username is already taken'] },
+        },
+        { status: 409 }
+      );
+    }
+    if (error.message === 'Email already registered') {
+      return NextResponse.json(
+        {
+          error: 'Email is already registered',
+          fieldErrors: { email: ['Email is already registered'] },
         },
         { status: 409 }
       );

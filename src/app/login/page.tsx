@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { User, Lock, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { AuthLayout } from '@/components/auth-layout';
+import { useAppStore } from '@/lib/store';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -49,7 +50,12 @@ export default function LoginPage() {
         return;
       }
 
-      // Successful login -> navigate to dashboard
+      // Successful login -> set user in store immediately
+      if (data?.user) {
+        useAppStore.getState().setUser(data.user);
+      }
+
+      // Navigate to dashboard
       window.location.href = '/';
     } catch {
       setErrorMessage('An unexpected connection error occurred. Please try again.');
@@ -74,54 +80,70 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} noValidate className="space-y-6">
+        <form onSubmit={handleSubmit} noValidate className="space-y-5">
           {/* Username / Email Field */}
-          <div className="flex items-center gap-3 border-b border-[#292929] pb-2.5 focus-within:border-[#C8A96B] transition-colors">
-            <User className="w-4 h-4 text-[#C8A96B] shrink-0" />
-            <input
-              id="username"
-              name="username"
-              type="text"
-              autoComplete="username"
-              autoCapitalize="none"
-              required
-              value={formData.username}
-              onChange={(e) => {
-                setFormData((prev) => ({ ...prev, username: e.target.value }));
-                if (errorMessage) setErrorMessage(null);
-              }}
-              placeholder="Email or Username"
-              disabled={isSubmitting}
-              className="w-full bg-transparent text-sm text-[#F5F1E8] placeholder-[#666] outline-none disabled:opacity-50 tracking-wide"
-            />
+          <div>
+            <label
+              htmlFor="username"
+              className="block text-xs font-bold text-white tracking-wider uppercase mb-1.5"
+            >
+              Email or Username
+            </label>
+            <div className="flex items-center gap-3 border-b border-[#383B40] pb-2.5 focus-within:border-white transition-colors">
+              <User className="w-4 h-4 text-white/90 shrink-0" />
+              <input
+                id="username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                required
+                value={formData.username}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, username: e.target.value }));
+                  if (errorMessage) setErrorMessage(null);
+                }}
+                placeholder="Enter your email or username"
+                disabled={isSubmitting}
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/60 outline-none disabled:opacity-50 tracking-wide font-medium"
+              />
+            </div>
           </div>
 
           {/* Password Field */}
-          <div className="flex items-center gap-3 border-b border-[#292929] pb-2.5 focus-within:border-[#C8A96B] transition-colors">
-            <Lock className="w-4 h-4 text-[#C8A96B] shrink-0" />
-            <input
-              id="password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              required
-              value={formData.password}
-              onChange={(e) => {
-                setFormData((prev) => ({ ...prev, password: e.target.value }));
-                if (errorMessage) setErrorMessage(null);
-              }}
-              placeholder="Password"
-              disabled={isSubmitting}
-              className="w-full bg-transparent text-sm text-[#F5F1E8] placeholder-[#666] outline-none disabled:opacity-50 tracking-wide"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="text-[#929292] hover:text-[#F5F1E8] transition-colors p-1"
+          <div>
+            <label
+              htmlFor="password"
+              className="block text-xs font-bold text-white tracking-wider uppercase mb-1.5"
             >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
+              Password
+            </label>
+            <div className="flex items-center gap-3 border-b border-[#383B40] pb-2.5 focus-within:border-white transition-colors">
+              <Lock className="w-4 h-4 text-white/90 shrink-0" />
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                required
+                value={formData.password}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, password: e.target.value }));
+                  if (errorMessage) setErrorMessage(null);
+                }}
+                placeholder="Enter your password"
+                disabled={isSubmitting}
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/60 outline-none disabled:opacity-50 tracking-wide font-medium"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="text-white/80 hover:text-white transition-colors p-1 cursor-pointer"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           {/* Actions Row: Forgot Password & LOGIN Button */}
@@ -129,7 +151,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => alert('Please contact your administrator or register a new workspace account.')}
-              className="text-xs font-semibold text-[#C8A96B] hover:text-[#e0c487] transition-colors cursor-pointer"
+              className="text-xs font-semibold text-white hover:text-white/80 underline-offset-4 hover:underline transition-colors cursor-pointer"
             >
               Forgot Password?
             </button>
@@ -137,7 +159,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex items-center justify-center gap-2 bg-[#C8A96B] hover:bg-[#d8bc7f] active:bg-[#b89859] text-[#0B0D0F] px-9 py-2.5 rounded-full font-extrabold text-xs tracking-[0.2em] uppercase shadow-md shadow-[#C8A96B]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="flex items-center justify-center gap-2 bg-[#C8A96B] hover:bg-[#d8bc7f] active:bg-[#b89859] text-[#0B0D0F] px-9 py-2.5 rounded-full font-black text-xs tracking-[0.2em] uppercase shadow-lg shadow-[#C8A96B]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {isSubmitting ? (
                 <>

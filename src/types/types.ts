@@ -5,6 +5,7 @@ export interface Profile {
   id: string;
   username: string | null;
   full_name: string | null;
+  email?: string | null;
   avatar_url: string | null;
   timezone: string;
   preferred_language: string;
@@ -187,7 +188,7 @@ export interface DailyLog {
   score_project?: boolean;
   score_english?: boolean;
   score_typewriting?: boolean;
-  score_market_journal?: boolean;
+  score_deep_work?: boolean;
   score_recall?: boolean;
   score_exercise?: boolean;
   score_sleep?: boolean;

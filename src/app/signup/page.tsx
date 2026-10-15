@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { User, AtSign, Lock, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
+import { User, AtSign, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { AuthLayout } from '@/components/auth-layout';
+import { useAppStore } from '@/lib/store';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function SignupPage() {
   const [formData, setFormData] = useState({
     name: '',
     username: '',
+    email: '',
     password: '',
     confirmPassword: '',
   });
@@ -19,6 +21,7 @@ export default function SignupPage() {
   const [fieldErrors, setFieldErrors] = useState<{
     name?: string;
     username?: string;
+    email?: string;
     password?: string;
     confirmPassword?: string;
     form?: string;
@@ -45,6 +48,10 @@ export default function SignupPage() {
       errors.username = 'Username must be at most 30 characters';
     } else if (!/^[a-zA-Z0-9_]+$/.test(trimmedUsername)) {
       errors.username = 'Only letters, numbers, and underscores allowed';
+    }
+
+    if (formData.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      errors.email = 'Please enter a valid email address';
     }
 
     if (!formData.password) {
@@ -81,6 +88,7 @@ export default function SignupPage() {
         body: JSON.stringify({
           name: formData.name.trim(),
           username: formData.username.trim(),
+          email: formData.email.trim() || undefined,
           password: formData.password,
           confirmPassword: formData.confirmPassword,
         }),
@@ -93,6 +101,7 @@ export default function SignupPage() {
           setFieldErrors({
             name: data.fieldErrors.name?.[0],
             username: data.fieldErrors.username?.[0],
+            email: data.fieldErrors.email?.[0],
             password: data.fieldErrors.password?.[0],
             confirmPassword: data.fieldErrors.confirmPassword?.[0],
             form: data.error,
@@ -104,8 +113,16 @@ export default function SignupPage() {
         return;
       }
 
-      // Successful signup with auto-login -> navigate to dashboard
-      window.location.href = '/';
+      // Successful signup with auto-login -> store user and navigate to profile
+      if (data?.user) {
+        useAppStore.getState().setUser(data.user);
+        useAppStore.getState().addToast({
+          type: 'success',
+          title: `Welcome, ${data.user.full_name || data.user.username}!`,
+          description: 'Your profile has been created successfully.',
+        });
+      }
+      window.location.href = '/profile';
     } catch {
       setFieldErrors({ form: 'An unexpected connection error occurred. Please try again.' });
       setIsSubmitting(false);
@@ -132,8 +149,14 @@ export default function SignupPage() {
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
           {/* Full Name */}
           <div>
-            <div className="flex items-center gap-3 border-b border-[#292929] pb-2 focus-within:border-[#C8A96B] transition-colors">
-              <User className="w-4 h-4 text-[#C8A96B] shrink-0" />
+            <label
+              htmlFor="name"
+              className="block text-xs font-bold text-white tracking-wider uppercase mb-1.5"
+            >
+              Full Name
+            </label>
+            <div className="flex items-center gap-3 border-b border-[#383B40] pb-2 focus-within:border-white transition-colors">
+              <User className="w-4 h-4 text-white/90 shrink-0" />
               <input
                 id="name"
                 name="name"
@@ -145,18 +168,52 @@ export default function SignupPage() {
                   setFormData((prev) => ({ ...prev, name: e.target.value }));
                   if (fieldErrors.name) setFieldErrors((prev) => ({ ...prev, name: undefined }));
                 }}
-                placeholder="Full Name"
+                placeholder="Enter your full name"
                 disabled={isSubmitting}
-                className="w-full bg-transparent text-sm text-[#F5F1E8] placeholder-[#666] outline-none disabled:opacity-50 tracking-wide"
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/60 outline-none disabled:opacity-50 tracking-wide font-medium"
               />
             </div>
             {fieldErrors.name && <p className="text-[11px] text-destructive mt-1">{fieldErrors.name}</p>}
           </div>
 
+          {/* Email Address */}
+          <div>
+            <label
+              htmlFor="email"
+              className="block text-xs font-bold text-white tracking-wider uppercase mb-1.5"
+            >
+              Email Address <span className="text-white/50 normal-case font-normal">(optional)</span>
+            </label>
+            <div className="flex items-center gap-3 border-b border-[#383B40] pb-2 focus-within:border-white transition-colors">
+              <Mail className="w-4 h-4 text-white/90 shrink-0" />
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                value={formData.email}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, email: e.target.value }));
+                  if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }));
+                }}
+                placeholder="you@example.com"
+                disabled={isSubmitting}
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/60 outline-none disabled:opacity-50 tracking-wide font-medium"
+              />
+            </div>
+            {fieldErrors.email && <p className="text-[11px] text-destructive mt-1">{fieldErrors.email}</p>}
+          </div>
+
           {/* Username */}
           <div>
-            <div className="flex items-center gap-3 border-b border-[#292929] pb-2 focus-within:border-[#C8A96B] transition-colors">
-              <AtSign className="w-4 h-4 text-[#C8A96B] shrink-0" />
+            <label
+              htmlFor="username"
+              className="block text-xs font-bold text-white tracking-wider uppercase mb-1.5"
+            >
+              Username
+            </label>
+            <div className="flex items-center gap-3 border-b border-[#383B40] pb-2 focus-within:border-white transition-colors">
+              <AtSign className="w-4 h-4 text-white/90 shrink-0" />
               <input
                 id="username"
                 name="username"
@@ -169,9 +226,9 @@ export default function SignupPage() {
                   setFormData((prev) => ({ ...prev, username: e.target.value }));
                   if (fieldErrors.username) setFieldErrors((prev) => ({ ...prev, username: undefined }));
                 }}
-                placeholder="Username"
+                placeholder="Choose a username"
                 disabled={isSubmitting}
-                className="w-full bg-transparent text-sm text-[#F5F1E8] placeholder-[#666] outline-none disabled:opacity-50 tracking-wide"
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/60 outline-none disabled:opacity-50 tracking-wide font-medium"
               />
             </div>
             {fieldErrors.username && <p className="text-[11px] text-destructive mt-1">{fieldErrors.username}</p>}
@@ -179,8 +236,14 @@ export default function SignupPage() {
 
           {/* Password */}
           <div>
-            <div className="flex items-center gap-3 border-b border-[#292929] pb-2 focus-within:border-[#C8A96B] transition-colors">
-              <Lock className="w-4 h-4 text-[#C8A96B] shrink-0" />
+            <label
+              htmlFor="password"
+              className="block text-xs font-bold text-white tracking-wider uppercase mb-1.5"
+            >
+              Password
+            </label>
+            <div className="flex items-center gap-3 border-b border-[#383B40] pb-2 focus-within:border-white transition-colors">
+              <Lock className="w-4 h-4 text-white/90 shrink-0" />
               <input
                 id="password"
                 name="password"
@@ -194,13 +257,13 @@ export default function SignupPage() {
                 }}
                 placeholder="Password (8+ chars)"
                 disabled={isSubmitting}
-                className="w-full bg-transparent text-sm text-[#F5F1E8] placeholder-[#666] outline-none disabled:opacity-50 tracking-wide"
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/60 outline-none disabled:opacity-50 tracking-wide font-medium"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="text-[#929292] hover:text-[#F5F1E8] transition-colors p-1"
+                className="text-white/80 hover:text-white transition-colors p-1 cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -210,8 +273,14 @@ export default function SignupPage() {
 
           {/* Confirm Password */}
           <div>
-            <div className="flex items-center gap-3 border-b border-[#292929] pb-2 focus-within:border-[#C8A96B] transition-colors">
-              <Lock className="w-4 h-4 text-[#C8A96B] shrink-0" />
+            <label
+              htmlFor="confirmPassword"
+              className="block text-xs font-bold text-white tracking-wider uppercase mb-1.5"
+            >
+              Confirm Password
+            </label>
+            <div className="flex items-center gap-3 border-b border-[#383B40] pb-2 focus-within:border-white transition-colors">
+              <Lock className="w-4 h-4 text-white/90 shrink-0" />
               <input
                 id="confirmPassword"
                 name="confirmPassword"
@@ -225,13 +294,13 @@ export default function SignupPage() {
                 }}
                 placeholder="Confirm Password"
                 disabled={isSubmitting}
-                className="w-full bg-transparent text-sm text-[#F5F1E8] placeholder-[#666] outline-none disabled:opacity-50 tracking-wide"
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/60 outline-none disabled:opacity-50 tracking-wide font-medium"
               />
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
-                className="text-[#929292] hover:text-[#F5F1E8] transition-colors p-1"
+                className="text-white/80 hover:text-white transition-colors p-1 cursor-pointer"
               >
                 {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -246,7 +315,7 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex items-center justify-center gap-2 bg-[#C8A96B] hover:bg-[#d8bc7f] active:bg-[#b89859] text-[#0B0D0F] px-9 py-2.5 rounded-full font-extrabold text-xs tracking-[0.2em] uppercase shadow-md shadow-[#C8A96B]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="flex items-center justify-center gap-2 bg-[#C8A96B] hover:bg-[#d8bc7f] active:bg-[#b89859] text-[#0B0D0F] px-9 py-2.5 rounded-full font-black text-xs tracking-[0.2em] uppercase shadow-lg shadow-[#C8A96B]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {isSubmitting ? (
                 <>

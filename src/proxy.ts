@@ -8,7 +8,7 @@ const protectedRoutes = [
   '/habits',
   '/analytics',
   '/timetable',
-  '/market',
+  '/profile',
   '/settings',
   '/achievements',
   '/roadmaps',
@@ -26,6 +26,8 @@ export default async function proxy(req: NextRequest) {
     path.startsWith('/brand') ||
     path.startsWith('/api/auth') ||
     path.startsWith('/icon-') ||
+    path === '/icon.png' ||
+    path === '/apple-icon.png' ||
     path === '/favicon.ico' ||
     path === '/manifest.json'
   ) {

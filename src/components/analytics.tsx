@@ -41,6 +41,10 @@ export function AnalyticsDashboard() {
   const { data: allSessions } = useFocusSessions();
   const { data: habits } = useHabits();
   const dailyFocusTargetMinutes = useAppStore((state) => state.dailyFocusTargetMinutes);
+  const allTasks = useAppStore((state) => state.tasks);
+  const completedTasksList = allTasks
+    .filter((t) => t.status === 'completed')
+    .sort((a, b) => new Date(b.completed_at || b.updated_at).getTime() - new Date(a.completed_at || a.updated_at).getTime());
 
   if (isLoading) {
     return (
@@ -224,6 +228,58 @@ export function AnalyticsDashboard() {
           </p>
         </div>
       )}
+
+      {/* Daily Task Execution History Log */}
+      <div className="bg-card rounded-2xl border border-border p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span>Daily Task Execution History</span>
+            </h3>
+            <p className="text-xs text-muted-foreground">Chronological log of finished priorities</p>
+          </div>
+          <span className="text-xs font-bold text-muted-foreground px-2.5 py-1 bg-accent rounded-lg">
+            {completedTasksList.length} completed
+          </span>
+        </div>
+
+        {completedTasksList.length > 0 ? (
+          <div className="divide-y divide-border border border-border rounded-xl overflow-hidden">
+            {completedTasksList.slice(0, 15).map((task) => (
+              <div key={task.id} className="p-3.5 flex items-center justify-between gap-3 hover:bg-accent/30 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-6 h-6 rounded-md bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground truncate">{task.title}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {task.completed_at
+                        ? new Date(task.completed_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+                        : task.due_date
+                        ? `Due ${task.due_date}`
+                        : 'Completed'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-accent text-muted-foreground">
+                    {task.priority}
+                  </span>
+                  <span className="text-xs font-bold text-[#C8A96B] px-2 py-0.5 rounded-full bg-[#C8A96B]/10 border border-[#C8A96B]/20">
+                    +{task.xp_reward || 20} XP
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-6 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
+            No completed task history recorded yet. Complete priorities on your Today dashboard to populate this log.
+          </div>
+        )}
+      </div>
 
       {/* Sustainable Routine Principles */}
       <div className="bg-card rounded-2xl border border-border p-5 sm:p-6 shadow-sm space-y-3">

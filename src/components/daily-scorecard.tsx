@@ -13,7 +13,7 @@ const SCORECARD_ITEMS = [
   { id: 'score_project', label: 'Project Dev' },
   { id: 'score_english', label: 'English Comm' },
   { id: 'score_typewriting', label: 'Typewriting' },
-  { id: 'score_market_journal', label: 'Market Journal' },
+  { id: 'score_deep_work', label: 'Deep Work Block' },
   { id: 'score_recall', label: 'Recall Session' },
   { id: 'score_exercise', label: 'Exercise / Gym' },
   { id: 'score_sleep', label: 'Sleep before 10:30' },

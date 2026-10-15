@@ -17,7 +17,6 @@ import {
   Zap,
   ChevronLeft,
   MoreHorizontal,
-  LineChart,
   LogOut,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
@@ -36,7 +35,6 @@ const secondaryNavItems = [
   { href: '/timetable', label: 'Timetable', icon: Clock },
   { href: '/goals', label: 'Goals', icon: Target },
   { href: '/habits', label: 'Habits', icon: Repeat },
-  { href: '/market', label: 'Market Protocol', icon: LineChart },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -44,6 +42,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const { data: user } = useAuth();
+  const logout = useLogout();
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const pathname = usePathname();
@@ -97,7 +96,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between px-4 h-14">
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground"
+              className="p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
               aria-label="Open Navigation Menu"
             >
               <Menu className="w-5 h-5" />
@@ -109,7 +108,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 className="h-8 w-auto max-h-8 object-contain"
               />
             </Link>
-            <div className="w-9" />
+
+            {/* Mobile Header: User Profile & Quick Logout */}
+            <div className="flex items-center gap-2">
+              <Link
+                href="/profile"
+                className="w-8 h-8 rounded-full bg-[#C8A96B]/15 border border-[#C8A96B]/30 flex items-center justify-center text-xs font-bold text-[#C8A96B] hover:border-[#C8A96B] transition-colors"
+                title="Profile Settings"
+              >
+                {(user?.full_name?.charAt(0) || user?.username?.charAt(0) || 'U').toUpperCase()}
+              </Link>
+              <button
+                onClick={logout}
+                className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </header>
 
@@ -118,15 +135,39 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </main>
 
-      {/* Floating Toggle Button (Desktop only, when sidebar is closed) */}
+      {/* Floating Toggle & User Controls (Desktop only, when sidebar is closed) */}
       {!sidebarOpen && (
-        <button
-          onClick={toggleSidebar}
-          className="hidden lg:flex fixed left-4 top-4 z-40 p-2.5 bg-card border border-border shadow-md rounded-xl hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-300 cursor-pointer"
-          title="Expand Sidebar"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        <>
+          <button
+            onClick={toggleSidebar}
+            className="hidden lg:flex fixed left-4 top-4 z-40 p-2.5 bg-card border border-border shadow-md rounded-xl hover:bg-accent text-muted-foreground hover:text-foreground transition-all duration-300 cursor-pointer"
+            title="Expand Sidebar"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="hidden lg:flex fixed right-4 top-4 z-40 items-center gap-2">
+            <Link
+              href="/profile"
+              className="flex items-center gap-2.5 px-3 py-1.5 bg-card border border-border shadow-md rounded-xl hover:bg-accent transition-all cursor-pointer"
+              title="Profile Settings"
+            >
+              <div className="w-6 h-6 rounded-full bg-[#C8A96B]/15 border border-[#C8A96B]/30 flex items-center justify-center text-[11px] font-bold text-[#C8A96B]">
+                {(user?.full_name?.charAt(0) || user?.username?.charAt(0) || 'U').toUpperCase()}
+              </div>
+              <span className="text-xs font-bold text-foreground truncate max-w-[120px]">
+                {user?.full_name || user?.username || 'Account'}
+              </span>
+            </Link>
+            <button
+              onClick={logout}
+              className="flex items-center gap-1.5 p-2 bg-card border border-border shadow-md rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer"
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </>
       )}
 
       {/* Mobile Bottom Sheet for More Options */}
@@ -166,6 +207,34 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     <span>{item.label}</span>
                   </Link>
                 ))}
+              </div>
+
+              {/* Mobile Profile & Logout Banner */}
+              <div className="pt-3 mt-3 border-t border-border">
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-accent/40 mb-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-[#C8A96B]/20 border border-[#C8A96B]/30 flex items-center justify-center text-xs font-bold text-[#C8A96B]">
+                      {(user?.full_name?.charAt(0) || user?.username?.charAt(0) || 'U').toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-foreground truncate">{user?.full_name || user?.username || 'FlowState User'}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono truncate">@{user?.username || 'user'}</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#C8A96B]/15 text-[#C8A96B]">
+                    Lvl {user?.level || 1}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    setMobileMoreOpen(false);
+                    logout();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-destructive bg-destructive/10 hover:bg-destructive hover:text-destructive-foreground transition-all cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out of FlowState</span>
+                </button>
               </div>
             </motion.div>
           </>
@@ -301,35 +370,39 @@ function SidebarContent({ user, onNavigate }: { user?: any; onNavigate?: () => v
       </div>
 
       {/* User Profile & Clear Logout Action */}
-      {user && (
-        <div className="p-4 border-t border-border bg-card">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-[#C8A96B]/15 border border-[#C8A96B]/30 flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-bold text-[#C8A96B]">
-                  {(user.full_name?.charAt(0) || user.username?.charAt(0) || 'U').toUpperCase()}
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate leading-tight">
-                  {user.full_name || user.username}
-                </p>
-                <p className="text-xs text-muted-foreground truncate">
-                  @{user.username || 'user'} · Lvl {user.level || 1}
-                </p>
-              </div>
+      <div className="p-3.5 border-t border-border bg-card">
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href="/profile"
+            onClick={onNavigate}
+            className="flex items-center gap-3 min-w-0 flex-1 p-1 rounded-xl hover:bg-accent transition-colors group cursor-pointer"
+            title="Account Profile"
+          >
+            <div className="w-9 h-9 rounded-full bg-[#C8A96B]/15 border border-[#C8A96B]/30 flex items-center justify-center flex-shrink-0 group-hover:border-[#C8A96B] transition-colors">
+              <span className="text-xs font-black text-[#C8A96B]">
+                {(user?.full_name?.charAt(0) || user?.username?.charAt(0) || 'U').toUpperCase()}
+              </span>
             </div>
-            <button
-              onClick={logout}
-              className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-              title="Sign out"
-              aria-label="Sign out"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-foreground truncate leading-tight group-hover:text-primary transition-colors">
+                {user?.full_name || user?.username || 'FlowState User'}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                @{user?.username || 'user'} · Lvl {user?.level || 1}
+              </p>
+            </div>
+          </Link>
+          <button
+            onClick={logout}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20 transition-all cursor-pointer shrink-0"
+            title="Sign out"
+            aria-label="Sign out"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="text-[11px]">Logout</span>
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

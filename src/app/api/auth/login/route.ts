@@ -5,7 +5,7 @@ import { createSession } from '@/lib/session';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 const loginSchema = z.object({
-  username: z.string().trim().min(1, 'Username is required'),
+  username: z.string().trim().min(1, 'Username or email is required'),
   password: z.string().min(1, 'Password is required'),
 });
 
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'local-client';
 
   // Rate limiting by client IP to defend against brute-force attacks
-  const rateLimit = checkRateLimit(`login:${ip}`, { limit: 10, windowMs: 60 * 1000 });
+  const rateLimit = checkRateLimit(`login:${ip}`, { limit: 30, windowMs: 60 * 1000 });
   if (!rateLimit.success) {
     return NextResponse.json(
       { error: 'Too many login attempts. Please wait a minute and try again.' },

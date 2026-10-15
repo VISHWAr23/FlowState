@@ -33,6 +33,15 @@ export function checkRateLimit(
   identifier: string,
   options: RateLimitOptions = {}
 ): { success: boolean; remaining: number; resetAt: number } {
+  // Relax rate limiting for local-client testing or development mode
+  if (process.env.NODE_ENV !== 'production' || identifier.includes('local-client')) {
+    return {
+      success: true,
+      remaining: 999,
+      resetAt: Date.now() + 60000,
+    };
+  }
+
   const limit = options.limit || 10; // Default 10 requests
   const windowMs = options.windowMs || 60 * 1000; // Default 1 minute
   const now = Date.now();

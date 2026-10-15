@@ -96,10 +96,10 @@ export const DEFAULT_LIFE_AREAS: LifeArea[] = [
 
 // ==================== AUTH HOOKS ====================
 export function useAuth() {
-  const user = useAppStore((state) => state.user);
+  const storeUser = useAppStore((state) => state.user);
   const setUser = useAppStore((state) => state.setUser);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['auth'],
     queryFn: async () => {
       try {
@@ -112,12 +112,18 @@ export function useAuth() {
         }
         return currentUser;
       } catch {
-        return user;
+        return storeUser;
       }
     },
-    initialData: user || undefined,
-    staleTime: 30 * 1000,
+    initialData: storeUser || undefined,
+    initialDataUpdatedAt: 0,
+    staleTime: 10 * 1000,
   });
+
+  return {
+    ...query,
+    data: query.data || storeUser,
+  };
 }
 
 export function useLogout() {
@@ -134,6 +140,36 @@ export function useLogout() {
     queryClient.clear();
     window.location.href = '/login';
   };
+}
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient();
+  const setUser = useAppStore((state) => state.setUser);
+  const addToast = useAppStore((state) => state.addToast);
+
+  return useMutation({
+    mutationFn: async (updates: { full_name?: string; username?: string; email?: string; timezone?: string }) => {
+      const res = await fetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update profile');
+      }
+      return data.user;
+    },
+    onSuccess: (updatedUser) => {
+      setUser(updatedUser);
+      queryClient.setQueryData(['auth'], updatedUser);
+      queryClient.invalidateQueries({ queryKey: ['auth'] });
+      addToast({ type: 'success', title: 'Profile updated successfully' });
+    },
+    onError: (error: Error) => {
+      addToast({ type: 'error', title: 'Failed to update profile', description: error.message });
+    },
+  });
 }
 
 // ==================== TASK HOOKS ====================

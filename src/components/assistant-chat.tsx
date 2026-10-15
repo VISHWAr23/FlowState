@@ -179,7 +179,7 @@ export function AssistantChat() {
             {/* Quick Prompts */}
             {messages.length < 3 && (
               <div className="px-4 pb-2 flex flex-wrap gap-2">
-                {['Analyze my market journal', 'Generate a Spring Boot question', 'Assess my English paragraph'].map((prompt) => (
+                {['Review my daily priorities', 'Generate a Spring Boot question', 'Assess my English paragraph'].map((prompt) => (
                   <button
                     key={prompt}
                     onClick={() => handleQuickPrompt(prompt)}

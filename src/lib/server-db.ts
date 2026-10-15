@@ -8,6 +8,8 @@ export interface StoredUser {
   username: string;
   username_lower: string;
   name: string;
+  email?: string;
+  email_lower?: string;
   password_hash: string;
   level: number;
   xp: number;
@@ -19,6 +21,7 @@ export interface UserPublicProfile {
   id: string;
   username: string;
   full_name: string;
+  email?: string | null;
   avatar_url: string | null;
   timezone: string;
   preferred_language: string;
@@ -47,15 +50,35 @@ export interface FlowStateDbData {
   user_settings: Record<string, any>;
 }
 
-const DB_PATH = path.join(process.cwd(), 'data', 'flowstate_db.json');
+const IS_SERVERLESS = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const BUNDLED_DB_PATH = path.join(process.cwd(), 'data', 'flowstate_db.json');
+const WRITABLE_DB_PATH = IS_SERVERLESS
+  ? path.join('/tmp', 'flowstate_db.json')
+  : BUNDLED_DB_PATH;
 
 function ensureDbFile(): FlowStateDbData {
   try {
-    const dir = path.dirname(DB_PATH);
+    const dir = path.dirname(WRITABLE_DB_PATH);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    if (!fs.existsSync(DB_PATH)) {
+
+    // In serverless environments, initialize /tmp from bundled database if not yet present
+    if (IS_SERVERLESS && !fs.existsSync(WRITABLE_DB_PATH) && fs.existsSync(BUNDLED_DB_PATH)) {
+      try {
+        fs.copyFileSync(BUNDLED_DB_PATH, WRITABLE_DB_PATH);
+      } catch (err) {
+        console.error('Failed to copy bundled database to /tmp:', err);
+      }
+    }
+
+    const targetPath = fs.existsSync(WRITABLE_DB_PATH)
+      ? WRITABLE_DB_PATH
+      : fs.existsSync(BUNDLED_DB_PATH)
+      ? BUNDLED_DB_PATH
+      : null;
+
+    if (!targetPath) {
       const initial: FlowStateDbData = {
         users: [],
         tasks: [],
@@ -67,10 +90,15 @@ function ensureDbFile(): FlowStateDbData {
         time_blocks: [],
         user_settings: {},
       };
-      fs.writeFileSync(DB_PATH, JSON.stringify(initial, null, 2), 'utf-8');
+      try {
+        fs.writeFileSync(WRITABLE_DB_PATH, JSON.stringify(initial, null, 2), 'utf-8');
+      } catch {
+        // Ignored if read-only
+      }
       return initial;
     }
-    const content = fs.readFileSync(DB_PATH, 'utf-8');
+
+    const content = fs.readFileSync(targetPath, 'utf-8');
     const parsed = JSON.parse(content);
     return {
       users: parsed.users || [],
@@ -101,13 +129,13 @@ function ensureDbFile(): FlowStateDbData {
 
 function saveDb(data: FlowStateDbData): void {
   try {
-    const dir = path.dirname(DB_PATH);
+    const dir = path.dirname(WRITABLE_DB_PATH);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    const tmpPath = `${DB_PATH}.tmp.${Date.now()}`;
+    const tmpPath = `${WRITABLE_DB_PATH}.tmp.${Date.now()}`;
     fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tmpPath, DB_PATH);
+    fs.renameSync(tmpPath, WRITABLE_DB_PATH);
   } catch (error) {
     console.error('Failed to save database file:', error);
   }
@@ -118,6 +146,7 @@ export function toPublicProfile(user: StoredUser): UserPublicProfile {
     id: user.id,
     username: user.username,
     full_name: user.name,
+    email: user.email || null,
     avatar_url: null,
     timezone: 'UTC',
     preferred_language: 'en',
@@ -137,10 +166,21 @@ export function toPublicProfile(user: StoredUser): UserPublicProfile {
 
 // ==================== USER MANAGEMENT ====================
 
-export function findUserByUsername(username: string): StoredUser | null {
+export function findUserByUsernameOrEmail(identifier: string): StoredUser | null {
   const db = ensureDbFile();
-  const normalized = username.trim().toLowerCase();
-  return db.users.find((u) => u.username_lower === normalized) || null;
+  const normalized = identifier.trim().toLowerCase();
+  return (
+    db.users.find(
+      (u) =>
+        u.username_lower === normalized ||
+        (u.email_lower && u.email_lower === normalized) ||
+        (u.email && u.email.trim().toLowerCase() === normalized)
+    ) || null
+  );
+}
+
+export function findUserByUsername(username: string): StoredUser | null {
+  return findUserByUsernameOrEmail(username);
 }
 
 export function findUserById(id: string): StoredUser | null {
@@ -148,16 +188,32 @@ export function findUserById(id: string): StoredUser | null {
   return db.users.find((u) => u.id === id) || null;
 }
 
-export function createUser(params: { name: string; username: string; password: string }): UserPublicProfile {
+export function createUser(params: {
+  name: string;
+  username: string;
+  email?: string;
+  password: string;
+}): UserPublicProfile {
   const db = ensureDbFile();
   const trimmedName = params.name.trim();
   const trimmedUsername = params.username.trim();
   const normalizedUsername = trimmedUsername.toLowerCase();
+  const trimmedEmail = params.email ? params.email.trim() : undefined;
+  const normalizedEmail = trimmedEmail ? trimmedEmail.toLowerCase() : undefined;
 
   // Validate uniqueness case-insensitively
-  const existing = db.users.find((u) => u.username_lower === normalizedUsername);
-  if (existing) {
+  const existingUsername = db.users.find((u) => u.username_lower === normalizedUsername);
+  if (existingUsername) {
     throw new Error('Username already taken');
+  }
+
+  if (normalizedEmail) {
+    const existingEmail = db.users.find(
+      (u) => u.email_lower === normalizedEmail || (u.email && u.email.toLowerCase() === normalizedEmail)
+    );
+    if (existingEmail) {
+      throw new Error('Email already registered');
+    }
   }
 
   // Hash password with bcrypt
@@ -169,6 +225,8 @@ export function createUser(params: { name: string; username: string; password: s
     username: trimmedUsername,
     username_lower: normalizedUsername,
     name: trimmedName,
+    email: trimmedEmail,
+    email_lower: normalizedEmail,
     password_hash: passwordHash,
     level: 1,
     xp: 0,
@@ -182,12 +240,56 @@ export function createUser(params: { name: string; username: string; password: s
   return toPublicProfile(newUser);
 }
 
-export function verifyUserCredentials(username: string, password: string): UserPublicProfile | null {
-  const user = findUserByUsername(username);
+export function verifyUserCredentials(identifier: string, password: string): UserPublicProfile | null {
+  const user = findUserByUsernameOrEmail(identifier);
   if (!user) return null;
 
   const valid = bcrypt.compareSync(password, user.password_hash);
   if (!valid) return null;
+
+  return toPublicProfile(user);
+}
+
+export function updateUser(
+  id: string,
+  updates: { name?: string; username?: string; email?: string; timezone?: string }
+): UserPublicProfile | null {
+  const db = ensureDbFile();
+  const user = db.users.find((u) => u.id === id);
+  if (!user) return null;
+
+  if (updates.username && updates.username.trim()) {
+    const trimmedUsername = updates.username.trim();
+    const normalized = trimmedUsername.toLowerCase();
+    const existing = db.users.find(
+      (u) => u.id !== id && u.username_lower === normalized
+    );
+    if (existing) {
+      throw new Error('Username already taken');
+    }
+    user.username = trimmedUsername;
+    user.username_lower = normalized;
+  }
+
+  if (updates.email !== undefined && updates.email.trim()) {
+    const trimmedEmail = updates.email.trim();
+    const normalized = trimmedEmail.toLowerCase();
+    const existing = db.users.find(
+      (u) => u.id !== id && (u.email_lower === normalized || (u.email && u.email.toLowerCase() === normalized))
+    );
+    if (existing) {
+      throw new Error('Email already taken');
+    }
+    user.email = trimmedEmail;
+    user.email_lower = normalized;
+  }
+
+  if (updates.name !== undefined && updates.name.trim()) {
+    user.name = updates.name.trim();
+  }
+
+  user.updated_at = new Date().toISOString();
+  saveDb(db);
 
   return toPublicProfile(user);
 }
@@ -249,6 +351,14 @@ export function updateUserTask(userId: string, taskId: string, updates: Partial<
   const updated: Task = {
     ...db.tasks[index],
     ...updates,
+    completed_at:
+      updates.status === 'completed'
+        ? (updates.completed_at || db.tasks[index].completed_at || new Date().toISOString())
+        : updates.status === 'pending'
+        ? null
+        : updates.completed_at !== undefined
+        ? updates.completed_at
+        : db.tasks[index].completed_at,
     user_id: userId,
     updated_at: new Date().toISOString(),
   };
