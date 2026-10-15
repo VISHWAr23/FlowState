@@ -101,11 +101,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <Link href="/" className="flex items-center gap-2">
+            <Link href="/" className="flex items-center justify-center">
               <img
-                src="/brand/flowstate-logo.png"
-                alt="FlowState"
-                className="h-8 w-auto max-h-8 object-contain"
+                src="/brand/flowstate-text.png"
+                alt="FlowState - Focus / Build / Grow"
+                className="h-6 sm:h-7 w-auto max-h-7 object-contain drop-shadow-sm"
               />
             </Link>
 
@@ -296,9 +296,9 @@ function SidebarContent({ user, onNavigate }: { user?: any; onNavigate?: () => v
       <div className="p-5 border-b border-border flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3" onClick={onNavigate}>
           <img
-            src="/brand/flowstate-logo.png"
-            alt="FlowState"
-            className="h-10 w-auto max-h-10 object-contain"
+            src="/brand/flowstate-text.png"
+            alt="FlowState - Focus / Build / Grow"
+            className="h-7 w-auto max-h-7 object-contain"
           />
         </Link>
         <button
