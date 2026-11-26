@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -18,12 +19,19 @@ import {
   ChevronLeft,
   MoreHorizontal,
   LogOut,
+  WifiOff,
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store';
-import { useAuth, useLogout } from '@/hooks';
+import { useAuth, useLogout, useRealtimeSync, useMigrateLocalData } from '@/hooks';
 import { cn } from '@/lib/utils';
-import { QuickCapture } from './quick-capture';
-import { AssistantChat } from './assistant-chat';
+import { ErrorBoundary } from './error-boundary';
+
+const AssistantChat = dynamic(() => import('./assistant-chat').then((m) => m.AssistantChat), {
+  ssr: false,
+});
+const LevelUpModal = dynamic(() => import('./level-up').then((m) => m.LevelUpModal), {
+  ssr: false,
+});
 
 const primaryNavItems = [
   { href: '/', label: 'Today', icon: Calendar },
@@ -41,8 +49,27 @@ const secondaryNavItems = [
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const { data: user } = useAuth();
   const logout = useLogout();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsOnline(navigator.onLine);
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
+
+  // Enable Realtime sync and local-to-cloud data migration for authenticated user
+  useRealtimeSync(user?.id);
+  useMigrateLocalData(user?.id);
+
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const toggleSidebar = useAppStore((state) => state.toggleSidebar);
   const pathname = usePathname();
@@ -130,8 +157,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        {/* Offline Banner Indicator */}
+        {!isOnline && (
+          <div className="bg-amber-500/15 border-b border-amber-500/30 text-amber-700 dark:text-amber-300 px-4 py-2 text-xs font-medium flex items-center justify-center gap-2">
+            <WifiOff className="w-3.5 h-3.5 shrink-0" />
+            <span>You are currently offline — changes are cached locally and will sync when you reconnect.</span>
+          </div>
+        )}
+
         <div className="p-4 lg:p-8 max-w-6xl mx-auto">
-          {children}
+          <ErrorBoundary>{children}</ErrorBoundary>
         </div>
       </main>
 
@@ -276,11 +311,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Mobile padding for bottom nav */}
       <div className="h-16 lg:hidden" />
 
-      {/* Quick Capture Floating Action Button */}
-      <QuickCapture />
-      
       {/* AI Assistant Chat Widget */}
       <AssistantChat />
+
+      {/* Level Up Celebration Modal */}
+      <LevelUpModal />
     </div>
   );
 }

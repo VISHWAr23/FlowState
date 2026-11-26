@@ -20,6 +20,7 @@ export interface Profile {
   weekly_review_day: number;
   morning_reminder: string | null;
   evening_reminder: string | null;
+  preferences?: Record<string, any>;
 }
 
 export interface LifeArea {
@@ -181,6 +182,7 @@ export interface DailyLog {
   habits_planned: number;
   xp_earned: number;
   productivity_score: number | null;
+  scores?: Record<string, boolean>;
   
   // CEO Manual Daily Scorecard
   score_online_class?: boolean;
@@ -296,7 +298,20 @@ export interface TimeBlock {
   color: string;
   days: number[]; // 0 = Sunday, 1 = Monday, etc. (for recurring blocks)
   date?: string; // YYYY-MM-DD for one-off blocks (today only)
+  user_id?: string;
+  created_at?: string;
+  updated_at?: string;
 }
+
+export interface ChatMessage {
+  id: string;
+  user_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  created_at: string;
+  updated_at?: string;
+}
+
 
 export const PRIORITY_CONFIG: Record<Priority, { label: string; color: string; value: number }> = {
   low: { label: 'Low', color: '#6b7280', value: 1 },

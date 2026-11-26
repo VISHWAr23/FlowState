@@ -17,18 +17,20 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
   const [notes, setNotes] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
   const [estimatedMinutes, setEstimatedMinutes] = useState<number>(30);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
 
   useEffect(() => {
+    setConfirmDelete(false);
     if (task) {
       setTitle(task.title);
       setNotes(task.notes || task.description || '');
       setPriority(task.priority);
       setEstimatedMinutes(task.estimated_minutes || 30);
     }
-  }, [task]);
+  }, [task, isOpen]);
 
   if (!isOpen || !task) return null;
 
@@ -48,10 +50,12 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
   };
 
   const handleDelete = () => {
-    if (confirm('Are you sure you want to remove this priority?')) {
-      deleteTask.mutate(task.id);
-      onClose();
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
     }
+    deleteTask.mutate(task.id);
+    onClose();
   };
 
   return (
@@ -132,11 +136,12 @@ export function TaskModal({ isOpen, onClose, task }: TaskModalProps) {
 
             <div className="flex items-center justify-between p-4 border-t border-border bg-muted/30">
               <button
+                type="button"
                 onClick={handleDelete}
                 className="flex items-center gap-2 px-3 py-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors text-sm font-medium cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
-                Delete
+                {confirmDelete ? 'Confirm Delete?' : 'Delete'}
               </button>
               <div className="flex items-center gap-2">
                 <button

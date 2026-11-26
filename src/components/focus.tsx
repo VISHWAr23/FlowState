@@ -22,10 +22,11 @@ import {
   ArrowRight,
   X,
   Plus,
+  Trash2,
 } from 'lucide-react';
-import { useTasks, useStartFocusSession, useEndFocusSession, useFocusSessions, useCompleteTask } from '@/hooks';
+import { useTasks, useStartFocusSession, useEndFocusSession, useFocusSessions, useDeleteFocusSession, useCompleteTask } from '@/hooks';
 import { useAppStore } from '@/lib/store';
-import { cn, formatDuration, getToday } from '@/lib/utils';
+import { cn, formatDuration, getToday, generateUUID } from '@/lib/utils';
 import type { Task } from '@/types/types';
 
 interface Preset {
@@ -77,6 +78,7 @@ export function FocusTimer() {
   const { data: sessions } = useFocusSessions();
   const startSession = useStartFocusSession();
   const endSession = useEndFocusSession();
+  const deleteSession = useDeleteFocusSession();
   const completeTask = useCompleteTask();
 
   const linkedTask = tasks?.find((t) => t.id === selectedTaskId) || null;
@@ -145,7 +147,7 @@ export function FocusTimer() {
     // Prevent overlapping sessions
     if (isActive) return;
 
-    const newSessionId = `session-${Date.now()}`;
+    const newSessionId = generateUUID();
     const startedAt = new Date().toISOString();
 
     setFocusTimerState({
@@ -722,11 +724,22 @@ export function FocusTimer() {
                   </div>
                 </div>
 
-                {session.flow_rating && (
-                  <span className="text-xs font-semibold px-2 py-1 bg-accent text-foreground rounded-lg flex-shrink-0">
-                    Flow: {session.flow_rating}/10
-                  </span>
-                )}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {session.flow_rating && (
+                    <span className="text-xs font-semibold px-2 py-1 bg-accent text-foreground rounded-lg">
+                      Flow: {session.flow_rating}/10
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => deleteSession.mutate(session.id)}
+                    className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                    aria-label="Delete focus session log"
+                    title="Delete session log"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))
           ) : (

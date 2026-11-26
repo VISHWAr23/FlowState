@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BrainCircuit, Plus, CheckCircle2, Circle, Eye, EyeOff, Trash2, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks';
 
 interface RecallItem {
   id: string;
@@ -17,6 +18,7 @@ interface RecallItem {
 const INITIAL_ITEMS: RecallItem[] = [];
 
 export function SpacedRevision() {
+  const { data: user } = useAuth();
   const [items, setItems] = useState<RecallItem[]>(INITIAL_ITEMS);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -24,25 +26,29 @@ export function SpacedRevision() {
   const [newNotes, setNewNotes] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load from localStorage on mount
+  // Strictly load Active Recall items from Supabase user.preferences
   useEffect(() => {
-    const saved = localStorage.getItem('flowstate-recall');
-    if (saved) {
-      try {
-        setItems(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse recall items', e);
-      }
+    const cloudRecall = (user?.preferences as Record<string, any> | undefined)?.recall_items;
+    if (Array.isArray(cloudRecall)) {
+      setItems(cloudRecall);
+    } else {
+      setItems([]);
     }
     setIsLoaded(true);
-  }, []);
+  }, [user?.id, user?.preferences]);
 
-  // Save to localStorage when items change
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem('flowstate-recall', JSON.stringify(items));
+  const syncRecallItems = useCallback(async (nextItems: RecallItem[]) => {
+    setItems(nextItems);
+    try {
+      await fetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferences: { recall_items: nextItems } }),
+      });
+    } catch (e) {
+      console.error('Failed to persist recall items to DB:', e);
     }
-  }, [items, isLoaded]);
+  }, []);
 
   const pendingItems = items.filter(i => !i.isRecalled);
   const recalledItems = items.filter(i => i.isRecalled);
@@ -54,13 +60,13 @@ export function SpacedRevision() {
   };
 
   const markRecalled = (id: string) => {
-    setItems(items.map(item => 
+    syncRecallItems(items.map(item => 
       item.id === id ? { ...item, isRecalled: true, isRevealed: false } : item
     ));
   };
   
   const removeItem = (id: string) => {
-    setItems(items.filter(item => item.id !== id));
+    syncRecallItems(items.filter(item => item.id !== id));
   };
 
   const handleManualAdd = (e: React.FormEvent) => {
@@ -76,7 +82,7 @@ export function SpacedRevision() {
       addedAt: new Date().toISOString(),
     };
 
-    setItems([newItem, ...items]);
+    syncRecallItems([newItem, ...items]);
     setNewTopic('');
     setNewNotes('');
     setIsAdding(false);
@@ -97,7 +103,7 @@ export function SpacedRevision() {
           isRecalled: false,
           addedAt: new Date().toISOString(),
         };
-        setItems([newItem, ...items]);
+        syncRecallItems([newItem, ...items]);
       }
     } catch (error) {
       console.error('Failed to generate recall question', error);

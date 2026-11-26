@@ -29,6 +29,50 @@ export function GoalsView() {
   const { data: goals, isLoading } = useGoals(activeTab);
   const { data: areas } = useLifeAreas();
   const deleteGoal = useDeleteGoal();
+  const updateGoal = useUpdateGoal();
+  const awardXp = useAppStore((state) => state.awardXp);
+
+  const handleToggleGoalStatus = (goal: Goal) => {
+    const completing = goal.status !== 'completed';
+    updateGoal.mutate({
+      id: goal.id,
+      updates: {
+        status: completing ? 'completed' : 'active',
+        completed_at: completing ? new Date().toISOString() : null,
+        progress: completing ? 100 : goal.progress,
+      },
+    }, {
+      onSuccess: () => {
+        if (completing) {
+          awardXp(goal.xp_reward || 500, 'Goal Completed');
+        }
+      },
+    });
+  };
+
+  const handleUpdateKeyResultValue = (goal: Goal & { key_results?: KeyResult[] }, krId: string, nextValue: number) => {
+    const krs = goal.key_results || [];
+    const updatedKRs = krs.map((kr) =>
+      kr.id === krId ? { ...kr, current_value: Math.max(0, nextValue) } : kr
+    );
+    const totalProgress =
+      updatedKRs.length > 0
+        ? Math.round(
+            updatedKRs.reduce((sum, kr) => {
+              const pct = kr.target_value > 0 ? Math.min(100, (kr.current_value / kr.target_value) * 100) : 0;
+              return sum + pct;
+            }, 0) / updatedKRs.length
+          )
+        : goal.progress;
+
+    updateGoal.mutate({
+      id: goal.id,
+      updates: {
+        key_results: updatedKRs as any,
+        progress: totalProgress,
+      } as any,
+    });
+  };
 
   return (
     <div className="space-y-8">
@@ -74,12 +118,14 @@ export function GoalsView() {
           </div>
         ) : goals && goals.length > 0 ? (
           goals.map((goal, index) => (
-            <GoalCard 
-              key={goal.id} 
-              goal={goal as any} 
-              index={index} 
+            <GoalCard
+              key={goal.id}
+              goal={goal as any}
+              index={index}
               onEdit={() => { setSelectedGoal(goal as any); setShowGoalModal(true); }}
               onDelete={() => deleteGoal.mutate(goal.id)}
+              onToggleComplete={() => handleToggleGoalStatus(goal)}
+              onUpdateKR={(krId, val) => handleUpdateKeyResultValue(goal as any, krId, val)}
             />
           ))
         ) : (
@@ -107,11 +153,27 @@ export function GoalsView() {
   );
 }
 
-function GoalCard({ goal, index, onEdit, onDelete }: { goal: Goal & { life_area?: any, key_results?: any[] }; index: number; onEdit: () => void; onDelete: () => void; }) {
+function GoalCard({
+  goal,
+  index,
+  onEdit,
+  onDelete,
+  onToggleComplete,
+  onUpdateKR,
+}: {
+  goal: Goal & { life_area?: any; key_results?: any[] };
+  index: number;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggleComplete: () => void;
+  onUpdateKR: (krId: string, val: number) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const area = goal.life_area;
   const progress = goal.progress || 0;
+  const isCompleted = goal.status === 'completed';
 
   return (
     <motion.div
@@ -188,41 +250,77 @@ function GoalCard({ goal, index, onEdit, onDelete }: { goal: Goal & { life_area?
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
+              type="button"
+              onClick={onToggleComplete}
+              className={cn(
+                "p-2 rounded-lg transition-colors cursor-pointer",
+                isCompleted
+                  ? "text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20"
+                  : "text-muted-foreground hover:text-emerald-500 hover:bg-emerald-500/10"
+              )}
+              title={isCompleted ? 'Reopen Goal' : 'Mark Goal Complete'}
+              aria-label={isCompleted ? 'Reopen Goal' : 'Mark Goal Complete'}
+            >
+              <CheckCircle2 className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
               onClick={() => setExpanded(!expanded)}
-              className="p-2 rounded-lg hover:bg-accent transition-colors"
+              className="p-2 rounded-lg hover:bg-accent transition-colors cursor-pointer"
+              aria-label={expanded ? 'Collapse Key Results' : 'Expand Key Results'}
             >
               {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
             </button>
             <div className="relative">
               <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="p-2 rounded-lg hover:bg-accent transition-colors"
+                type="button"
+                onClick={() => { setMenuOpen(!menuOpen); setConfirmDelete(false); }}
+                className="p-2 rounded-lg hover:bg-accent transition-colors cursor-pointer"
+                aria-label="Goal options"
               >
                 <MoreHorizontal className="w-5 h-5" />
               </button>
               <AnimatePresence>
                 {menuOpen && (
                   <>
-                    <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                    <div className="fixed inset-0 z-10" onClick={() => { setMenuOpen(false); setConfirmDelete(false); }} />
                     <motion.div
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      className="absolute right-0 top-full mt-1 w-32 bg-popover border border-border rounded-lg shadow-lg overflow-hidden z-20"
+                      className="absolute right-0 top-full mt-1 w-40 bg-popover border border-border rounded-lg shadow-lg overflow-hidden z-20"
                     >
                       <button
+                        type="button"
+                        onClick={() => { setMenuOpen(false); onToggleComplete(); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        {isCompleted ? 'Reopen' : 'Complete'}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => { setMenuOpen(false); onEdit(); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors cursor-pointer"
                       >
                         <Edit3 className="w-4 h-4" /> Edit
                       </button>
                       <button
-                        onClick={() => { setMenuOpen(false); onDelete(); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors"
+                        type="button"
+                        onClick={() => {
+                          if (!confirmDelete) {
+                            setConfirmDelete(true);
+                            return;
+                          }
+                          setMenuOpen(false);
+                          setConfirmDelete(false);
+                          onDelete();
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
                       >
-                        <Trash2 className="w-4 h-4" /> Delete
+                        <Trash2 className="w-4 h-4" /> {confirmDelete ? 'Confirm?' : 'Delete'}
                       </button>
                     </motion.div>
                   </>
@@ -246,7 +344,13 @@ function GoalCard({ goal, index, onEdit, onDelete }: { goal: Goal & { life_area?
             <div className="p-5 space-y-3">
               <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Key Results</h4>
               {goal.key_results.map((kr, i) => (
-                <KeyResultRow key={kr.id} kr={kr} color={area?.color || '#3b82f6'} index={i} />
+                <KeyResultRow
+                  key={kr.id}
+                  kr={kr}
+                  color={area?.color || '#3b82f6'}
+                  index={i}
+                  onUpdateValue={(val) => onUpdateKR(kr.id, val)}
+                />
               ))}
             </div>
           </motion.div>
@@ -256,8 +360,19 @@ function GoalCard({ goal, index, onEdit, onDelete }: { goal: Goal & { life_area?
   );
 }
 
-function KeyResultRow({ kr, color, index }: { kr: KeyResult; color: string; index: number }) {
+function KeyResultRow({
+  kr,
+  color,
+  index,
+  onUpdateValue,
+}: {
+  kr: KeyResult;
+  color: string;
+  index: number;
+  onUpdateValue: (val: number) => void;
+}) {
   const krProgress = kr.target_value > 0 ? Math.round((kr.current_value / kr.target_value) * 100) : 0;
+  const step = kr.target_value >= 20 ? 10 : 1;
 
   return (
     <motion.div
@@ -266,16 +381,41 @@ function KeyResultRow({ kr, color, index }: { kr: KeyResult; color: string; inde
       transition={{ delay: index * 0.05 }}
       className="flex items-center gap-3"
     >
-      <div className={cn(
-        "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0",
-        krProgress >= 100 ? "border-green-500 bg-green-500" : "border-muted-foreground"
-      )}>
+      <button
+        type="button"
+        onClick={() => onUpdateValue(krProgress >= 100 ? 0 : kr.target_value)}
+        className={cn(
+          "w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors",
+          krProgress >= 100 ? "border-green-500 bg-green-500" : "border-muted-foreground hover:border-primary"
+        )}
+        title={krProgress >= 100 ? 'Reset Key Result' : 'Mark Key Result 100%'}
+      >
         {krProgress >= 100 && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
-      </div>
+      </button>
       <div className="flex-1">
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between gap-2 mb-1">
           <span className="text-sm">{kr.title}</span>
-          <span className="text-sm font-medium">{kr.current_value}/{kr.target_value} {kr.unit}</span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onUpdateValue(Math.max(0, kr.current_value - step))}
+              className="px-1.5 py-0.5 text-xs rounded bg-accent hover:bg-accent/80 cursor-pointer"
+              title="Decrease progress"
+            >
+              -
+            </button>
+            <span className="text-xs font-medium tabular-nums min-w-[60px] text-center">
+              {kr.current_value}/{kr.target_value} {kr.unit}
+            </span>
+            <button
+              type="button"
+              onClick={() => onUpdateValue(Math.min(kr.target_value, kr.current_value + step))}
+              className="px-1.5 py-0.5 text-xs rounded bg-accent hover:bg-accent/80 cursor-pointer"
+              title="Increase progress"
+            >
+              +
+            </button>
+          </div>
         </div>
         <div className="h-1.5 bg-accent rounded-full overflow-hidden">
           <div
@@ -289,32 +429,42 @@ function KeyResultRow({ kr, color, index }: { kr: KeyResult; color: string; inde
 }
 
 function GoalModal({ onClose, areas, goal }: { onClose: () => void; areas: any[]; goal?: Goal | null }) {
+  const defaultTargetDate = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
   const [title, setTitle] = useState(goal?.title || '');
   const [description, setDescription] = useState(goal?.description || '');
-  const [areaId, setAreaId] = useState(goal?.life_area_id || '');
+  const [areaId, setAreaId] = useState(goal?.life_area_id || areas[0]?.id || '');
   const [priority, setPriority] = useState(goal?.priority || 3);
-  const [targetDate, setTargetDate] = useState(goal?.target_date || '');
-  
-  const initialKeyResults = goal?.key_results && goal.key_results.length > 0 
-    ? goal.key_results.map(kr => ({ title: kr.title, target_value: kr.target_value, unit: kr.unit })) 
-    : [{ title: '', target_value: 100, unit: '%' }];
-    
+  const [targetDate, setTargetDate] = useState(goal?.target_date || defaultTargetDate);
+
+  const initialKeyResults = goal?.key_results && goal.key_results.length > 0
+    ? goal.key_results.map(kr => ({ id: kr.id, title: kr.title, current_value: kr.current_value || 0, target_value: kr.target_value, unit: kr.unit || '%' }))
+    : [{ id: undefined as string | undefined, title: '', current_value: 0, target_value: 100, unit: '%' }];
+
   const [keyResults, setKeyResults] = useState(initialKeyResults);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const createGoal = useCreateGoal();
   const updateGoal = useUpdateGoal();
-  const addToast = useAppStore((state) => state.addToast);
+  const deleteGoal = useDeleteGoal();
 
   const handleSubmit = () => {
-    if (!title || !areaId || !targetDate) return;
+    if (!title.trim() || !areaId || !targetDate) return;
+
+    const validKRs = keyResults.filter(kr => kr.title.trim());
+    const computedProgress = validKRs.length > 0
+      ? Math.round(
+          validKRs.reduce((sum, kr) => sum + (kr.target_value > 0 ? Math.min(100, (kr.current_value / kr.target_value) * 100) : 0), 0) / validKRs.length
+        )
+      : (goal?.progress ?? 0);
 
     const goalData = {
-      title,
-      description,
+      title: title.trim(),
+      description: description.trim() || null,
       life_area_id: areaId,
       priority,
       target_date: targetDate,
-      key_results: keyResults.filter(kr => kr.title) as any,
+      progress: computedProgress,
+      key_results: validKRs as any,
     };
 
     onClose();
@@ -329,7 +479,11 @@ function GoalModal({ onClose, areas, goal }: { onClose: () => void; areas: any[]
   };
 
   const addKeyResult = () => {
-    setKeyResults([...keyResults, { title: '', target_value: 100, unit: '%' }]);
+    setKeyResults([...keyResults, { id: undefined, title: '', current_value: 0, target_value: 100, unit: '%' }]);
+  };
+
+  const removeKeyResult = (index: number) => {
+    setKeyResults((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -422,7 +576,7 @@ function GoalModal({ onClose, areas, goal }: { onClose: () => void; areas: any[]
               <label className="text-sm font-medium mb-1.5 block">Key Results</label>
               <div className="space-y-2">
                 {keyResults.map((kr, i) => (
-                  <div key={i} className="flex gap-2">
+                  <div key={i} className="flex items-center gap-2">
                     <input
                       type="text"
                       value={kr.title}
@@ -432,24 +586,47 @@ function GoalModal({ onClose, areas, goal }: { onClose: () => void; areas: any[]
                         setKeyResults(newKRs);
                       }}
                       placeholder={`Key result ${i + 1}`}
-                      className="flex-1 px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      className="flex-1 min-w-0 px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
                     <input
                       type="number"
+                      min="1"
                       value={kr.target_value}
                       onChange={(e) => {
                         const newKRs = [...keyResults];
                         newKRs[i].target_value = Number(e.target.value);
                         setKeyResults(newKRs);
                       }}
-                      className="w-20 px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      title="Target value"
+                      className="w-16 px-2 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
+                    <input
+                      type="text"
+                      value={kr.unit}
+                      onChange={(e) => {
+                        const newKRs = [...keyResults];
+                        newKRs[i].unit = e.target.value;
+                        setKeyResults(newKRs);
+                      }}
+                      placeholder="%"
+                      title="Unit (e.g. %, tasks, hrs)"
+                      className="w-14 px-2 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeKeyResult(i)}
+                      className="p-2 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                      aria-label="Remove key result"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 ))}
               </div>
               <button
+                type="button"
                 onClick={addKeyResult}
-                className="mt-2 text-sm text-primary hover:underline flex items-center gap-1"
+                className="mt-2 text-sm text-primary hover:underline flex items-center gap-1 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 Add key result
@@ -457,13 +634,33 @@ function GoalModal({ onClose, areas, goal }: { onClose: () => void; areas: any[]
             </div>
           </div>
 
-          <button
-            onClick={handleSubmit}
-            disabled={!title || !areaId || !targetDate || updateGoal.isPending || createGoal.isPending}
-            className="w-full py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-          >
-            {goal ? 'Update Goal' : 'Create Goal'}
-          </button>
+          <div className="flex items-center gap-3">
+            {goal && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!confirmDelete) {
+                    setConfirmDelete(true);
+                    return;
+                  }
+                  deleteGoal.mutate(goal.id);
+                  onClose();
+                }}
+                className="px-4 py-3 text-red-500 hover:bg-red-500/10 border border-red-500/20 rounded-xl font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                {confirmDelete ? 'Confirm?' : 'Delete'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!title.trim() || !areaId || !targetDate || updateGoal.isPending || createGoal.isPending}
+              className="flex-1 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {goal ? 'Update Goal' : 'Create Goal'}
+            </button>
+          </div>
         </div>
       </motion.div>
     </motion.div>

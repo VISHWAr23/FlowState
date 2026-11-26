@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   /* config options here */
   // @ts-ignore - newer next.js option
   allowedDevOrigins: ['10.198.60.204'],
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion'],
+  },
 };
 
 export default nextConfig;

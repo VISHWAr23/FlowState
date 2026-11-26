@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { calculateLevel, getLevelTitle } from '@/types/types';
 import type { Profile, LifeArea, Goal, Task, Habit, FocusSession, DailyLog, Badge, UserBadge, TimeBlock } from '@/types/types';
 
 export interface DistractionSettings {
@@ -98,7 +99,8 @@ interface AppState {
 
   // Timetable Custom Blocks
   timeBlocks: TimeBlock[];
-  addTimeBlock: (block: Omit<TimeBlock, 'id'>) => void;
+  setTimeBlocks: (blocks: TimeBlock[]) => void;
+  addTimeBlock: (block: Omit<TimeBlock, 'id'> & { id?: string }) => void;
   updateTimeBlock: (id: string, updates: Partial<TimeBlock>) => void;
   deleteTimeBlock: (id: string) => void;
 
@@ -220,9 +222,11 @@ export const useAppStore = create<AppState>()(
       // Habits
       habits: [],
       setHabits: (habits) => set({ habits }),
-      addHabit: (habit) => set((state) => ({
-        habits: [...state.habits, habit]
-      })),
+      addHabit: (habit) => set((state) => {
+        const exists = state.habits.some(h => h.id === habit.id);
+        if (exists) return { habits: state.habits.map(h => h.id === habit.id ? habit : h) };
+        return { habits: [...state.habits, habit] };
+      }),
       updateHabit: (id, updates) => set((state) => ({
         habits: state.habits.map(h => h.id === id ? { ...h, ...updates, updated_at: new Date().toISOString() } : h)
       })),
@@ -233,9 +237,11 @@ export const useAppStore = create<AppState>()(
       // Goals
       goals: [],
       setGoals: (goals) => set({ goals }),
-      addGoal: (goal) => set((state) => ({
-        goals: [...state.goals, goal]
-      })),
+      addGoal: (goal) => set((state) => {
+        const exists = state.goals.some(g => g.id === goal.id);
+        if (exists) return { goals: state.goals.map(g => g.id === goal.id ? goal : g) };
+        return { goals: [...state.goals, goal] };
+      }),
       updateGoal: (id, updates) => set((state) => ({
         goals: state.goals.map(g => g.id === id ? { ...g, ...updates, updated_at: new Date().toISOString() } : g)
       })),
@@ -246,9 +252,11 @@ export const useAppStore = create<AppState>()(
       // Focus Sessions
       focusSessions: [],
       setFocusSessions: (sessions) => set({ focusSessions: sessions }),
-      addFocusSession: (session) => set((state) => ({
-        focusSessions: [session, ...state.focusSessions]
-      })),
+      addFocusSession: (session) => set((state) => {
+        const exists = state.focusSessions.some(s => s.id === session.id);
+        if (exists) return { focusSessions: state.focusSessions.map(s => s.id === session.id ? session : s) };
+        return { focusSessions: [session, ...state.focusSessions] };
+      }),
       updateFocusSession: (id, updates) => set((state) => ({
         focusSessions: state.focusSessions.map(s => s.id === id ? { ...s, ...updates } : s)
       })),
@@ -287,31 +295,47 @@ export const useAppStore = create<AppState>()(
       levelUpData: null,
       triggerLevelUp: (level, title) => set({ showLevelUp: true, levelUpData: { level, title } }),
       dismissLevelUp: () => set({ showLevelUp: false, levelUpData: null }),
-      awardXp: (amount, reason) => set((state) => {
-        if (!state.user) return state;
-        const newXp = (state.user.xp || 0) + amount;
-        const newLevel = Math.floor(newXp / 500) + 1;
-        const currentLevel = state.user.level || 1;
-        const shouldLevelUp = newLevel > currentLevel;
-        if (shouldLevelUp) {
-          get().triggerLevelUp(newLevel, `Level ${newLevel} Achieved!`);
-        }
-        return {
-          user: {
-            ...state.user,
-            xp: newXp,
-            level: newLevel,
+      awardXp: (amount, reason) => {
+        if (!amount || amount <= 0) return;
+        set((state) => {
+          if (!state.user) return state;
+          const newXp = (state.user.xp || 0) + amount;
+          const newLevel = calculateLevel(newXp);
+          const currentLevel = state.user.level || 1;
+          if (newLevel > currentLevel) {
+            setTimeout(() => {
+              get().triggerLevelUp(newLevel, getLevelTitle(newLevel));
+            }, 0);
           }
-        };
-      }),
+          return {
+            user: {
+              ...state.user,
+              xp: newXp,
+              level: newLevel,
+            }
+          };
+        });
+        if (typeof window !== 'undefined') {
+          fetch('/api/xp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ amount, reason }),
+          }).catch(() => {});
+        }
+      },
 
       preferredView: 'list',
       setPreferredView: (view) => set({ preferredView: view }),
 
       timeBlocks: [],
-      addTimeBlock: (block) => set((state) => ({ 
-        timeBlocks: [...state.timeBlocks, { ...block, id: Math.random().toString(36).substring(7) }] 
-      })),
+      setTimeBlocks: (blocks) => set({ timeBlocks: blocks }),
+      addTimeBlock: (block) => set((state) => {
+        const id = block.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c==='x'?r:(r&0x3|0x8)).toString(16); }));
+        const nextBlock = { ...block, id };
+        const exists = state.timeBlocks.some(tb => tb.id === id);
+        if (exists) return { timeBlocks: state.timeBlocks.map(tb => tb.id === id ? nextBlock : tb) };
+        return { timeBlocks: [...state.timeBlocks, nextBlock] };
+      }),
       updateTimeBlock: (id, updates) => set((state) => ({
         timeBlocks: state.timeBlocks.map(tb => tb.id === id ? { ...tb, ...updates } : tb)
       })),
@@ -352,7 +376,6 @@ export const useAppStore = create<AppState>()(
       },
       partialize: (state) => ({ 
         preferredView: state.preferredView,
-        timeBlocks: state.timeBlocks,
         focusTimerActive: state.focusTimerActive,
         focusTimerPaused: state.focusTimerPaused,
         focusSessionId: state.focusSessionId,
@@ -362,12 +385,6 @@ export const useAppStore = create<AppState>()(
         focusPausedAt: state.focusPausedAt,
         focusElapsedBeforePause: state.focusElapsedBeforePause,
         interruptionNotes: state.interruptionNotes,
-        dailyScores: state.dailyScores,
-        tasks: state.tasks,
-        habits: state.habits,
-        goals: state.goals,
-        focusSessions: state.focusSessions,
-        dailyLogs: state.dailyLogs,
         distractionSettings: state.distractionSettings,
         minimumDayTarget: state.minimumDayTarget,
         dailyFocusTargetMinutes: state.dailyFocusTargetMinutes,

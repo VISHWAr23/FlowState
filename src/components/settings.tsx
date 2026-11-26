@@ -139,14 +139,46 @@ function AppearanceSettings({ theme, setTheme }: { theme?: string; setTheme: (t:
 }
 
 function NotificationSettings() {
-  const [morningTime, setMorningTime] = useState('08:00');
-  const [eveningTime, setEveningTime] = useState('18:00');
-  const [habitReminders, setHabitReminders] = useState(true);
-  const [goalReminders, setGoalReminders] = useState(true);
+  const { data: user } = useAuth();
+  const updateProfile = useUpdateProfile();
+  const prefs = (user?.preferences as Record<string, any>) || {};
+
+  const [morningTime, setMorningTime] = useState(user?.morning_reminder || '08:00');
+  const [eveningTime, setEveningTime] = useState(user?.evening_reminder || '18:00');
+  const [habitReminders, setHabitReminders] = useState(prefs.habitReminders !== false);
+  const [goalReminders, setGoalReminders] = useState(prefs.goalReminders !== false);
+
+  useEffect(() => {
+    if (user) {
+      if (user.morning_reminder) setMorningTime(user.morning_reminder);
+      if (user.evening_reminder) setEveningTime(user.evening_reminder);
+      const p = (user.preferences as Record<string, any>) || {};
+      if (p.habitReminders !== undefined) setHabitReminders(Boolean(p.habitReminders));
+      if (p.goalReminders !== undefined) setGoalReminders(Boolean(p.goalReminders));
+    }
+  }, [user]);
+
+  const handleSaveNotifications = () => {
+    updateProfile.mutate({
+      morning_reminder: morningTime,
+      evening_reminder: eveningTime,
+      preferences: { habitReminders, goalReminders },
+    });
+  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <h2 className="text-lg font-semibold">Notifications</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Notifications</h2>
+        <button
+          onClick={handleSaveNotifications}
+          disabled={updateProfile.isPending}
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+        >
+          <Save className="w-3.5 h-3.5" />
+          <span>{updateProfile.isPending ? 'Saving...' : 'Save Reminders'}</span>
+        </button>
+      </div>
 
       <div className="space-y-4">
         <div className="bg-card rounded-xl border border-border p-4 space-y-4">
@@ -393,14 +425,40 @@ function ProfileSettings({ user }: { user: any }) {
 }
 
 function PreferenceSettings() {
-  const [weeklyReviewDay, setWeeklyReviewDay] = useState(0);
-  const [xpCap, setXpCap] = useState(500);
+  const { data: user } = useAuth();
+  const updateProfile = useUpdateProfile();
+  const [weeklyReviewDay, setWeeklyReviewDay] = useState(user?.weekly_review_day ?? 0);
+  const [xpCap, setXpCap] = useState(user?.daily_xp_cap ?? 500);
+
+  useEffect(() => {
+    if (user) {
+      if (user.weekly_review_day !== undefined) setWeeklyReviewDay(user.weekly_review_day);
+      if (user.daily_xp_cap !== undefined) setXpCap(user.daily_xp_cap);
+    }
+  }, [user]);
+
+  const handleSavePrefs = () => {
+    updateProfile.mutate({
+      weekly_review_day: weeklyReviewDay,
+      daily_xp_cap: xpCap,
+    });
+  };
 
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <h2 className="text-lg font-semibold">Preferences</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Preferences</h2>
+        <button
+          onClick={handleSavePrefs}
+          disabled={updateProfile.isPending}
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:bg-primary/90 disabled:opacity-50 cursor-pointer"
+        >
+          <Save className="w-3.5 h-3.5" />
+          <span>{updateProfile.isPending ? 'Saving...' : 'Save Preferences'}</span>
+        </button>
+      </div>
 
       <div className="space-y-4">
         <div className="bg-card rounded-xl border border-border p-4">

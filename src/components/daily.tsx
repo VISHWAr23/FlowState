@@ -17,8 +17,9 @@ import {
   Flag,
   Edit2,
   Calendar,
+  Trash2,
 } from 'lucide-react';
-import { useTasks, useDailyLog, useUpsertDailyLog, useCompleteTask, useCreateTask, useLifeAreas } from '@/hooks';
+import { useTasks, useDailyLog, useUpsertDailyLog, useCompleteTask, useCreateTask, useDeleteTask, useLifeAreas } from '@/hooks';
 import { useAppStore } from '@/lib/store';
 import { cn, getToday, formatDate } from '@/lib/utils';
 import { TaskModal } from './modals/task-modal';
@@ -37,6 +38,7 @@ export function DailyExecution() {
   
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isEditingEvening, setIsEditingEvening] = useState(false);
   
   const [selectedDate, setSelectedDate] = useState(getToday());
 
@@ -45,8 +47,10 @@ export function DailyExecution() {
   const { data: areas } = useLifeAreas();
   const completeTask = useCompleteTask();
   const createTask = useCreateTask();
+  const deleteTask = useDeleteTask();
   const upsertLog = useUpsertDailyLog();
   const addToast = useAppStore((state) => state.addToast);
+  const awardXp = useAppStore((state) => state.awardXp);
 
   const today = getToday();
   const completedTasks = tasks?.filter(t => t.status === 'completed').length || 0;
@@ -76,21 +80,25 @@ export function DailyExecution() {
       morning_completed_at: new Date().toISOString(),
     }, {
       onSuccess: () => {
+        if (!morningDone) awardXp(20, 'Morning Ritual');
         addToast({ type: 'success', title: 'Morning ritual complete! +20 XP' });
       }
     });
   };
 
   const handleEveningComplete = () => {
+    const wasDone = eveningDone;
     upsertLog.mutate({
       log_date: selectedDate,
-      evening_completed_at: new Date().toISOString(),
+      evening_completed_at: dailyLog?.evening_completed_at || new Date().toISOString(),
       top_wins: wins.filter(w => w.trim() !== ''),
       day_rating: dayRating,
       gratitude_note: gratitude,
     }, {
       onSuccess: () => {
-        addToast({ type: 'success', title: 'Evening ritual complete! +20 XP' });
+        setIsEditingEvening(false);
+        if (!wasDone) awardXp(20, 'Evening Reflection');
+        addToast({ type: 'success', title: wasDone ? 'Evening reflection updated' : 'Evening ritual complete! +20 XP' });
       }
     });
   };
@@ -172,21 +180,31 @@ export function DailyExecution() {
       </AnimatePresence>
 
       {/* Task Input */}
-      <div className="relative">
-        <input
-          type="text"
-          value={newTaskInput}
-          onChange={(e) => setNewTaskInput(e.target.value)}
-          placeholder="What needs to be done today?"
-          className="w-full px-4 py-4 pl-12 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && newTaskInput.trim()) {
-              handleAddTask();
-            }
-          }}
-        />
-        <Plus className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleAddTask();
+        }}
+        className="flex items-center gap-2"
+      >
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={newTaskInput}
+            onChange={(e) => setNewTaskInput(e.target.value)}
+            placeholder="What needs to be done today?"
+            className="w-full px-4 py-3.5 pl-11 bg-card border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+          />
+          <Plus className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+        </div>
+        <button
+          type="submit"
+          disabled={!newTaskInput.trim()}
+          className="px-4 py-3.5 bg-primary text-primary-foreground rounded-xl text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 cursor-pointer shrink-0 transition-colors"
+        >
+          Add
+        </button>
+      </form>
 
       {/* Tasks List */}
       <div className="space-y-3">
@@ -255,7 +273,27 @@ export function DailyExecution() {
                   </div>
                 </div>
 
-                <PriorityDot priority={task.priority} />
+                <div className="flex items-center gap-2">
+                  <PriorityDot priority={task.priority} />
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedTask(task); setIsTaskModalOpen(true); }}
+                    className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors cursor-pointer"
+                    aria-label={`Edit ${task.title}`}
+                    title="Edit task"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteTask.mutate(task.id)}
+                    className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                    aria-label={`Delete ${task.title}`}
+                    title="Delete task"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </motion.div>
             ))
           ) : (
@@ -269,7 +307,7 @@ export function DailyExecution() {
 
       {/* Evening Ritual */}
       <AnimatePresence>
-        {morningDone && !eveningDone && (
+        {morningDone && (!eveningDone || isEditingEvening) && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -335,23 +373,49 @@ export function DailyExecution() {
               </div>
             </div>
 
-            <button
-              onClick={handleEveningComplete}
-              className="w-full py-3 bg-indigo-500 text-white rounded-xl font-medium hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2"
-            >
-              <Zap className="w-4 h-4" />
-              Complete Day & Earn XP
-            </button>
+            <div className="flex gap-2">
+              {isEditingEvening && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingEvening(false)}
+                  className="px-4 py-3 bg-accent text-foreground rounded-xl font-medium hover:bg-accent/80 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleEveningComplete}
+                className="flex-1 py-3 bg-indigo-500 text-white rounded-xl font-medium hover:bg-indigo-600 transition-colors flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Zap className="w-4 h-4" />
+                {isEditingEvening ? 'Save Reflection' : 'Complete Day & Earn XP'}
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {eveningDone && dailyLog && (
+      {eveningDone && !isEditingEvening && dailyLog && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="p-8 bg-green-50 dark:bg-green-950/20 rounded-2xl border border-green-200 dark:border-green-800"
+          className="p-8 bg-green-50 dark:bg-green-950/20 rounded-2xl border border-green-200 dark:border-green-800 relative"
         >
+          <button
+            type="button"
+            onClick={() => {
+              const savedWins = (dailyLog.top_wins as string[]) || [];
+              setWins([savedWins[0] || '', savedWins[1] || '', savedWins[2] || '']);
+              setDayRating(dailyLog.day_rating || 0);
+              setGratitude(dailyLog.gratitude_note || '');
+              setIsEditingEvening(true);
+            }}
+            className="absolute top-4 right-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-background/80 border border-border hover:bg-background text-foreground cursor-pointer"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+            Edit
+          </button>
           <div className="text-center mb-6">
             <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
             <h3 className="text-xl font-semibold text-green-800 dark:text-green-200">Day Complete!</h3>
@@ -365,7 +429,7 @@ export function DailyExecution() {
               <div>
                 <h4 className="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">Today's Wins</h4>
                 <ul className="list-disc list-inside text-sm text-green-700 dark:text-green-300 space-y-1">
-                  {dailyLog.top_wins.map((win, i) => (
+                  {(dailyLog.top_wins as string[]).map((win: string, i: number) => (
                     <li key={i}>{win}</li>
                   ))}
                 </ul>

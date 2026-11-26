@@ -19,7 +19,10 @@ export interface Database {
         Row: {
           id: string;
           username: string | null;
+          username_lower: string | null;
           full_name: string | null;
+          email: string | null;
+          email_lower: string | null;
           avatar_url: string | null;
           timezone: string;
           preferred_language: string;
@@ -35,6 +38,7 @@ export interface Database {
           morning_reminder: string | null;
           evening_reminder: string | null;
           password_hash: string | null;
+          preferences: Json | null;
         };
         Insert: Record<string, any> & { id: string };
         Update: Record<string, any>;
@@ -85,6 +89,7 @@ export interface Database {
         Row: {
           id: string;
           goal_id: string;
+          user_id: string;
           title: string;
           target_value: number;
           current_value: number;
@@ -106,6 +111,7 @@ export interface Database {
           parent_task_id: string | null;
           title: string;
           description: string | null;
+          notes: string | null;
           status: string;
           priority: string;
           energy_level: string | null;
@@ -181,12 +187,15 @@ export interface Database {
           planned_duration: number;
           actual_duration: number | null;
           status: string;
+          session_type: string;
           interruptions: number;
           interruption_notes: string[] | null;
           flow_rating: number | null;
           notes: string | null;
+          reflection_notes: string | null;
           xp_earned: number;
           created_at: string;
+          updated_at: string;
         };
         Insert: Record<string, any> & { user_id: string };
         Update: Record<string, any>;
@@ -212,6 +221,9 @@ export interface Database {
           habits_planned: number;
           xp_earned: number;
           productivity_score: number | null;
+          scores: Json | null;
+          created_at: string;
+          updated_at: string;
         };
         Insert: Record<string, any> & { user_id: string; log_date: string };
         Update: Record<string, any>;
@@ -281,7 +293,37 @@ export interface Database {
         };
         Insert: Record<string, any> & { user_id: string; amount: number; source: string };
         Update: Record<string, any>;
-          Relationships: any[];
+        Relationships: any[];
+      };
+      time_blocks: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          start_hour: number;
+          duration_hours: number;
+          color: string;
+          days: number[];
+          block_date: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Record<string, any> & { user_id: string; title: string };
+        Update: Record<string, any>;
+        Relationships: any[];
+      };
+      chat_messages: {
+        Row: {
+          id: string;
+          user_id: string;
+          role: string;
+          content: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Record<string, any> & { user_id: string; role: string; content: string };
+        Update: Record<string, any>;
+        Relationships: any[];
       };
     };
     Views: Record<string, never>;

@@ -1,8 +1,16 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createUser, findUserByUsername } from '@/lib/server-db';
+import bcrypt from 'bcryptjs';
+import { createAdminClient } from '@/lib/supabase-server';
+import { isPlaceholderUrl } from '@/lib/supabase';
 import { createSession } from '@/lib/session';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { generateUUID } from '@/lib/utils';
+import {
+  profileRowToPublic,
+  seedDefaultLifeAreasForUser,
+  syncSupabaseAuthSession,
+} from '@/lib/supabase-sync';
 
 const signupSchema = z
   .object({
@@ -31,7 +39,6 @@ const signupSchema = z
   });
 
 export async function POST(req: Request) {
-  // Rate limiting by client IP
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'local-client';
   const rateLimit = checkRateLimit(`signup:${ip}`, { limit: 20, windowMs: 60 * 1000 });
   if (!rateLimit.success) {
@@ -39,6 +46,10 @@ export async function POST(req: Request) {
       { error: 'Too many registration attempts. Please try again in a minute.' },
       { status: 429 }
     );
+  }
+
+  if (isPlaceholderUrl) {
+    return NextResponse.json({ error: 'Database is not configured' }, { status: 500 });
   }
 
   try {
@@ -55,10 +66,23 @@ export async function POST(req: Request) {
     }
 
     const { name, username, email, password } = result.data;
+    const normalizedUsername = username.toLowerCase();
+    const trimmedEmail = email ? email.trim() : undefined;
+    const normalizedEmail = trimmedEmail ? trimmedEmail.toLowerCase() : undefined;
 
-    // Check if username is already taken (case-insensitively)
-    const existing = findUserByUsername(username);
-    if (existing) {
+    const admin = createAdminClient();
+
+    const { data: existingUsername, error: uErr } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('username_lower', normalizedUsername)
+      .maybeSingle();
+
+    if (uErr) {
+      return NextResponse.json({ error: uErr.message }, { status: 500 });
+    }
+
+    if (existingUsername) {
       return NextResponse.json(
         {
           error: 'Username is already taken',
@@ -68,15 +92,67 @@ export async function POST(req: Request) {
       );
     }
 
-    // Create user securely with bcrypt hash
-    const newUser = createUser({
-      name,
+    if (normalizedEmail) {
+      const { data: existingEmail, error: eErr } = await admin
+        .from('profiles')
+        .select('id')
+        .eq('email_lower', normalizedEmail)
+        .maybeSingle();
+
+      if (eErr) {
+        return NextResponse.json({ error: eErr.message }, { status: 500 });
+      }
+
+      if (existingEmail) {
+        return NextResponse.json(
+          {
+            error: 'Email is already registered',
+            fieldErrors: { email: ['Email is already registered'] },
+          },
+          { status: 409 }
+        );
+      }
+    }
+
+    const userId = generateUUID();
+    const salt = bcrypt.genSaltSync(10);
+    const passwordHash = bcrypt.hashSync(password, salt);
+    const now = new Date().toISOString();
+
+    const { data: insertedRow, error: insertError } = await admin
+      .from('profiles')
+      .insert({
+        id: userId,
+        username,
+        username_lower: normalizedUsername,
+        full_name: name,
+        email: trimmedEmail || null,
+        email_lower: normalizedEmail || null,
+        password_hash: passwordHash,
+        level: 1,
+        xp: 0,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('*')
+      .single();
+
+    if (insertError || !insertedRow) {
+      return NextResponse.json(
+        { error: insertError?.message || 'Failed to create account in database' },
+        { status: 500 }
+      );
+    }
+
+    const newUser = profileRowToPublic(insertedRow);
+    await seedDefaultLifeAreasForUser(userId);
+    const supabaseSession = await syncSupabaseAuthSession({
+      id: userId,
+      email: trimmedEmail,
       username,
-      email: email || undefined,
       password,
     });
 
-    // Automatically create session and sign the user in
     await createSession({
       id: newUser.id,
       username: newUser.username,
@@ -87,31 +163,14 @@ export async function POST(req: Request) {
       {
         success: true,
         user: newUser,
+        supabaseSession,
       },
       { status: 201 }
     );
   } catch (error: any) {
     console.error('Signup error:', error);
-    if (error.message === 'Username already taken') {
-      return NextResponse.json(
-        {
-          error: 'Username is already taken',
-          fieldErrors: { username: ['Username is already taken'] },
-        },
-        { status: 409 }
-      );
-    }
-    if (error.message === 'Email already registered') {
-      return NextResponse.json(
-        {
-          error: 'Email is already registered',
-          fieldErrors: { email: ['Email is already registered'] },
-        },
-        { status: 409 }
-      );
-    }
     return NextResponse.json(
-      { error: 'An unexpected error occurred during registration. Please try again.' },
+      { error: error?.message || 'An unexpected error occurred during registration.' },
       { status: 500 }
     );
   }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Save, Trash2 } from 'lucide-react';
-import { useAppStore } from '@/lib/store';
+import { useCreateTimeBlock, useUpdateTimeBlock, useDeleteTimeBlock } from '@/hooks';
 import { getToday } from '@/lib/utils';
 import type { TimeBlock } from '@/types/types';
 
@@ -12,21 +12,24 @@ interface TimeBlockModalProps {
   onClose: () => void;
   block: TimeBlock | null;
   selectedDate?: string | null;
+  defaultStartHour?: number | null;
 }
 
 
-export function TimeBlockModal({ isOpen, onClose, block, selectedDate }: TimeBlockModalProps) {
+export function TimeBlockModal({ isOpen, onClose, block, selectedDate, defaultStartHour }: TimeBlockModalProps) {
   const [title, setTitle] = useState('');
   const [startHour, setStartHour] = useState(8.5);
   const [durationHours, setDurationHours] = useState(1);
   const [color, setColor] = useState('bg-primary/10 text-primary border-primary/20');
   const [recurrence, setRecurrence] = useState<'today' | 'daily'>('today');
-  
-  const addTimeBlock = useAppStore((state) => state.addTimeBlock);
-  const updateTimeBlock = useAppStore((state) => state.updateTimeBlock);
-  const deleteTimeBlock = useAppStore((state) => state.deleteTimeBlock);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const addTimeBlock = useCreateTimeBlock();
+  const updateTimeBlock = useUpdateTimeBlock();
+  const deleteTimeBlock = useDeleteTimeBlock();
 
   useEffect(() => {
+    setConfirmDelete(false);
     if (block) {
       setTitle(block.title);
       setStartHour(block.startHour);
@@ -35,12 +38,12 @@ export function TimeBlockModal({ isOpen, onClose, block, selectedDate }: TimeBlo
       setRecurrence(block.date ? 'today' : 'daily');
     } else {
       setTitle('');
-      setStartHour(8.5);
+      setStartHour(defaultStartHour ?? 8.5);
       setDurationHours(1);
       setColor('bg-primary/10 text-primary border-primary/20');
       setRecurrence('today');
     }
-  }, [block, isOpen]);
+  }, [block, isOpen, defaultStartHour]);
 
   if (!isOpen) return null;
 
@@ -57,18 +60,21 @@ export function TimeBlockModal({ isOpen, onClose, block, selectedDate }: TimeBlo
     };
 
     if (block) {
-      updateTimeBlock(block.id, blockData);
+      updateTimeBlock.mutate({ id: block.id, updates: blockData });
     } else {
-      addTimeBlock(blockData);
+      addTimeBlock.mutate(blockData);
     }
     onClose();
   };
 
   const handleDelete = () => {
-    if (block && confirm('Are you sure you want to delete this block?')) {
-      deleteTimeBlock(block.id);
-      onClose();
+    if (!block) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
     }
+    deleteTimeBlock.mutate(block.id);
+    onClose();
   };
 
   const PRESET_COLORS = [
@@ -180,11 +186,12 @@ export function TimeBlockModal({ isOpen, onClose, block, selectedDate }: TimeBlo
             <div className="flex items-center justify-between p-4 border-t border-border bg-muted/30">
               {block ? (
                 <button
+                  type="button"
                   onClick={handleDelete}
-                  className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors text-sm font-medium cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" />
-                  Delete
+                  {confirmDelete ? 'Confirm Delete?' : 'Delete'}
                 </button>
               ) : <div />}
               <div className="flex items-center gap-2">

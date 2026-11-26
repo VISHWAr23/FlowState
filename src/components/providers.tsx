@@ -9,12 +9,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 1000 * 60 * 10, // 10 minutes cache
+        staleTime: 30 * 1000, // 30s fresh window makes route switches instant while Realtime handles live updates
         gcTime: 1000 * 60 * 60, // 1 hour garbage collection
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
-        refetchOnMount: false,
-        retry: 0, // Instant response, no repeated waits
+        refetchOnWindowFocus: true, // Auto-refetch when user switches between laptop/mobile tabs
+        refetchOnReconnect: true, // Auto-refetch when reconnecting to network
+        refetchOnMount: true,
+        retry: 1,
         networkMode: 'always',
       },
       mutations: {

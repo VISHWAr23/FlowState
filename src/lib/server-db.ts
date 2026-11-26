@@ -11,8 +11,17 @@ export interface StoredUser {
   email?: string;
   email_lower?: string;
   password_hash: string;
+  timezone?: string;
   level: number;
   xp: number;
+  total_focus_minutes?: number;
+  current_streak?: number;
+  longest_streak?: number;
+  daily_xp_cap?: number;
+  weekly_review_day?: number;
+  morning_reminder?: string | null;
+  evening_reminder?: string | null;
+  preferences?: Record<string, any>;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +45,7 @@ export interface UserPublicProfile {
   weekly_review_day: number;
   morning_reminder: string | null;
   evening_reminder: string | null;
+  preferences?: Record<string, any>;
 }
 
 export interface FlowStateDbData {
@@ -148,20 +158,70 @@ export function toPublicProfile(user: StoredUser): UserPublicProfile {
     full_name: user.name,
     email: user.email || null,
     avatar_url: null,
-    timezone: 'UTC',
+    timezone: user.timezone || 'UTC',
     preferred_language: 'en',
     created_at: user.created_at,
     updated_at: user.updated_at,
     level: user.level || 1,
     xp: user.xp || 0,
-    total_focus_minutes: 0,
-    current_streak: 1,
-    longest_streak: 1,
-    daily_xp_cap: 500,
-    weekly_review_day: 0,
-    morning_reminder: null,
-    evening_reminder: null,
+    total_focus_minutes: user.total_focus_minutes || 0,
+    current_streak: user.current_streak || 1,
+    longest_streak: user.longest_streak || 1,
+    daily_xp_cap: user.daily_xp_cap || 500,
+    weekly_review_day: user.weekly_review_day ?? 0,
+    morning_reminder: user.morning_reminder || null,
+    evening_reminder: user.evening_reminder || null,
+    preferences: user.preferences || {},
   };
+}
+
+export function upsertStoredUser(params: {
+  id: string;
+  username: string;
+  name: string;
+  email?: string | null;
+  password_hash?: string | null;
+  xp?: number;
+  level?: number;
+  timezone?: string;
+  preferences?: Record<string, any>;
+}): void {
+  const db = ensureDbFile();
+  const idx = db.users.findIndex((u) => u.id === params.id);
+  const now = new Date().toISOString();
+  if (idx >= 0) {
+    db.users[idx] = {
+      ...db.users[idx],
+      username: params.username,
+      username_lower: params.username.toLowerCase(),
+      name: params.name,
+      email: params.email || db.users[idx].email,
+      email_lower: params.email ? params.email.toLowerCase() : db.users[idx].email_lower,
+      password_hash: params.password_hash || db.users[idx].password_hash,
+      xp: params.xp ?? db.users[idx].xp,
+      level: params.level ?? db.users[idx].level,
+      timezone: params.timezone ?? db.users[idx].timezone,
+      preferences: params.preferences ?? db.users[idx].preferences,
+      updated_at: now,
+    };
+  } else {
+    db.users.push({
+      id: params.id,
+      username: params.username,
+      username_lower: params.username.toLowerCase(),
+      name: params.name,
+      email: params.email || undefined,
+      email_lower: params.email ? params.email.toLowerCase() : undefined,
+      password_hash: params.password_hash || '',
+      xp: params.xp || 0,
+      level: params.level || 1,
+      timezone: params.timezone || 'UTC',
+      preferences: params.preferences || {},
+      created_at: now,
+      updated_at: now,
+    });
+  }
+  saveDb(db);
 }
 
 // ==================== USER MANAGEMENT ====================
@@ -189,6 +249,7 @@ export function findUserById(id: string): StoredUser | null {
 }
 
 export function createUser(params: {
+  id?: string;
   name: string;
   username: string;
   email?: string;
@@ -221,7 +282,7 @@ export function createUser(params: {
   const passwordHash = bcrypt.hashSync(params.password, salt);
 
   const newUser: StoredUser = {
-    id: crypto.randomUUID(),
+    id: params.id || crypto.randomUUID(),
     username: trimmedUsername,
     username_lower: normalizedUsername,
     name: trimmedName,
@@ -252,7 +313,22 @@ export function verifyUserCredentials(identifier: string, password: string): Use
 
 export function updateUser(
   id: string,
-  updates: { name?: string; username?: string; email?: string; timezone?: string }
+  updates: {
+    name?: string;
+    username?: string;
+    email?: string;
+    timezone?: string;
+    xp?: number;
+    level?: number;
+    total_focus_minutes?: number;
+    current_streak?: number;
+    longest_streak?: number;
+    daily_xp_cap?: number;
+    weekly_review_day?: number;
+    morning_reminder?: string | null;
+    evening_reminder?: string | null;
+    preferences?: Record<string, any>;
+  }
 ): UserPublicProfile | null {
   const db = ensureDbFile();
   const user = db.users.find((u) => u.id === id);
@@ -286,6 +362,19 @@ export function updateUser(
 
   if (updates.name !== undefined && updates.name.trim()) {
     user.name = updates.name.trim();
+  }
+  if (updates.timezone !== undefined) user.timezone = updates.timezone;
+  if (updates.xp !== undefined) user.xp = updates.xp;
+  if (updates.level !== undefined) user.level = updates.level;
+  if (updates.total_focus_minutes !== undefined) user.total_focus_minutes = updates.total_focus_minutes;
+  if (updates.current_streak !== undefined) user.current_streak = updates.current_streak;
+  if (updates.longest_streak !== undefined) user.longest_streak = updates.longest_streak;
+  if (updates.daily_xp_cap !== undefined) user.daily_xp_cap = updates.daily_xp_cap;
+  if (updates.weekly_review_day !== undefined) user.weekly_review_day = updates.weekly_review_day;
+  if (updates.morning_reminder !== undefined) user.morning_reminder = updates.morning_reminder;
+  if (updates.evening_reminder !== undefined) user.evening_reminder = updates.evening_reminder;
+  if (updates.preferences !== undefined) {
+    user.preferences = { ...(user.preferences || {}), ...updates.preferences };
   }
 
   user.updated_at = new Date().toISOString();
@@ -533,9 +622,73 @@ export function createUserFocusSession(userId: string, sessionData: Partial<Focu
     created_at: new Date().toISOString(),
   };
 
-  db.focus_sessions.push(newSession);
+  const idx = db.focus_sessions.findIndex((s) => s.id === newSession.id);
+  if (idx >= 0) {
+    db.focus_sessions[idx] = newSession;
+  } else {
+    db.focus_sessions.push(newSession);
+  }
   saveDb(db);
   return newSession;
+}
+
+export function updateUserFocusSession(
+  userId: string,
+  sessionId: string,
+  updates: Partial<FocusSession>
+): FocusSession | null {
+  const db = ensureDbFile();
+  const idx = db.focus_sessions.findIndex((s) => s.id === sessionId && s.user_id === userId);
+  if (idx === -1) return null;
+
+  const updated: FocusSession = {
+    ...db.focus_sessions[idx],
+    ...updates,
+    user_id: userId,
+  };
+  db.focus_sessions[idx] = updated;
+  saveDb(db);
+  return updated;
+}
+
+// ==================== HABIT LOGS ISOLATION ====================
+
+export function getUserHabitLogs(userId: string, date?: string): HabitLog[] {
+  const db = ensureDbFile();
+  return db.habit_logs.filter(
+    (l) => l.user_id === userId && (!date || l.completed_date === date)
+  );
+}
+
+export function toggleUserHabitLog(
+  userId: string,
+  habitId: string,
+  date: string
+): { completed: boolean; log: HabitLog | null } {
+  const db = ensureDbFile();
+  const existingIdx = db.habit_logs.findIndex(
+    (l) => l.user_id === userId && l.habit_id === habitId && l.completed_date === date
+  );
+
+  if (existingIdx >= 0) {
+    db.habit_logs.splice(existingIdx, 1);
+    saveDb(db);
+    return { completed: false, log: null };
+  }
+
+  const newLog: HabitLog = {
+    id: crypto.randomUUID(),
+    habit_id: habitId,
+    user_id: userId,
+    completed_date: date,
+    completed_at: new Date().toISOString(),
+    duration_minutes: null,
+    notes: null,
+    mood: null,
+  };
+  db.habit_logs.push(newLog);
+  saveDb(db);
+  return { completed: true, log: newLog };
 }
 
 // ==================== DAILY LOGS ISOLATION ====================
@@ -553,6 +706,7 @@ export function upsertUserDailyLog(userId: string, date: string, logData: Partia
     const updated: DailyLog = {
       ...db.daily_logs[index],
       ...logData,
+      scores: logData.scores ? { ...(db.daily_logs[index].scores || {}), ...logData.scores } : db.daily_logs[index].scores,
       user_id: userId,
       log_date: date,
     };
@@ -561,7 +715,7 @@ export function upsertUserDailyLog(userId: string, date: string, logData: Partia
     return updated;
   } else {
     const newLog: DailyLog = {
-      id: `log-${date}-${userId}`,
+      id: logData.id || `log-${date}-${userId}`,
       user_id: userId,
       log_date: date,
       morning_completed_at: logData.morning_completed_at || null,
@@ -579,6 +733,7 @@ export function upsertUserDailyLog(userId: string, date: string, logData: Partia
       habits_planned: logData.habits_planned || 0,
       xp_earned: logData.xp_earned || 0,
       productivity_score: logData.productivity_score || 80,
+      scores: logData.scores || {},
     };
     db.daily_logs.push(newLog);
     saveDb(db);
@@ -593,6 +748,30 @@ export function getUserTimeBlocks(userId: string): TimeBlock[] {
   return db.time_blocks
     .filter((tb) => tb.user_id === userId)
     .map(({ user_id, ...block }) => block);
+}
+
+export function upsertUserTimeBlock(userId: string, block: TimeBlock): TimeBlock {
+  const db = ensureDbFile();
+  const idx = db.time_blocks.findIndex((tb) => tb.id === block.id && tb.user_id === userId);
+  const entry = { ...block, user_id: userId };
+  if (idx >= 0) {
+    db.time_blocks[idx] = entry;
+  } else {
+    db.time_blocks.push(entry);
+  }
+  saveDb(db);
+  return block;
+}
+
+export function deleteUserTimeBlock(userId: string, blockId: string): boolean {
+  const db = ensureDbFile();
+  const initialLen = db.time_blocks.length;
+  db.time_blocks = db.time_blocks.filter((tb) => !(tb.id === blockId && tb.user_id === userId));
+  if (db.time_blocks.length !== initialLen) {
+    saveDb(db);
+    return true;
+  }
+  return false;
 }
 
 export function saveUserTimeBlocks(userId: string, blocks: TimeBlock[]): void {

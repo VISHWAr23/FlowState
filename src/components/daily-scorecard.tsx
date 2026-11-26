@@ -2,10 +2,9 @@
 
 import { useCallback, useMemo } from 'react';
 import { CheckCircle2, Circle, Trophy } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, getToday } from '@/lib/utils';
 import { motion } from 'framer-motion';
-import { useAppStore } from '@/lib/store';
-import { getToday } from '@/lib/utils';
+import { useDailyLog, useUpsertDailyLog } from '@/hooks';
 
 const SCORECARD_ITEMS = [
   { id: 'score_online_class', label: 'Online Class' },
@@ -23,25 +22,28 @@ type ScorecardKey = (typeof SCORECARD_ITEMS)[number]['id'];
 
 export function DailyScorecard() {
   const today = getToday();
-  const dailyScores = useAppStore((state) => state.dailyScores);
-  const updateDailyScore = useAppStore((state) => state.updateDailyScore);
+  const { data: remoteLog } = useDailyLog(today);
+  const upsertLog = useUpsertDailyLog();
 
-  // Derive scores from local state
+  // Strictly read daily_logs.scores from database
   const scores = useMemo(() => {
     const result: Record<string, boolean> = {};
-    const todayScores = dailyScores[today] || {};
+    const remoteScores = (remoteLog?.scores as Record<string, boolean>) || {};
     for (const item of SCORECARD_ITEMS) {
-      result[item.id] = !!todayScores[item.id];
+      result[item.id] = Boolean(remoteScores[item.id]);
     }
     return result;
-  }, [dailyScores, today]);
+  }, [remoteLog]);
 
   const toggleScore = useCallback(
     (id: ScorecardKey) => {
       const newValue = !scores[id];
-      updateDailyScore(today, id, newValue);
+      upsertLog.mutate({
+        log_date: today,
+        scores: { ...scores, [id]: newValue },
+      });
     },
-    [scores, today, updateDailyScore]
+    [scores, today, upsertLog]
   );
 
   const currentScore = Object.values(scores).filter(Boolean).length;
@@ -87,7 +89,7 @@ export function DailyScorecard() {
             <button
               key={item.id}
               onClick={() => toggleScore(item.id)}
-              className="flex items-center gap-3 p-2 hover:bg-accent/50 rounded-lg transition-colors text-left group"
+              className="flex items-center gap-3 p-2 hover:bg-accent/50 rounded-lg transition-colors text-left group cursor-pointer"
               role="checkbox"
               aria-checked={isChecked}
               aria-label={item.label}

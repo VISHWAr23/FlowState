@@ -4,7 +4,7 @@ import type { Database } from './database.types';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
 
-const isPlaceholderUrl =
+export const isPlaceholderUrl =
   !process.env.NEXT_PUBLIC_SUPABASE_URL ||
   supabaseUrl.includes('placeholder') ||
   !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
@@ -13,8 +13,8 @@ const isPlaceholderUrl =
 // Circuit breaker state
 let isBackendReachable = !isPlaceholderUrl;
 let lastTripTimestamp = 0;
-const CIRCUIT_BREAKER_COOLDOWN_MS = 30000; // 30 seconds cooldown before retrying
-const REQUEST_TIMEOUT_MS = 2000; // Max 2 seconds per Supabase request to prevent UI blocking
+const CIRCUIT_BREAKER_COOLDOWN_MS = 15000; // 15 seconds cooldown before retrying
+const REQUEST_TIMEOUT_MS = 8000; // 8 seconds timeout to accommodate mobile networks
 
 export function isSupabaseOnline(): boolean {
   if (isPlaceholderUrl) return false;
@@ -39,14 +39,12 @@ export function resetCircuitBreaker() {
 }
 
 /**
- * Resilient, fast custom fetch wrapper with timeout & circuit breaker
- * Eliminates multi-second hangs on dead or offline Supabase endpoints.
+ * Resilient custom fetch wrapper with timeout & circuit breaker
  */
 async function resilientSupabaseFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
-  // If circuit breaker is tripped, fail instantly (0ms) rather than waiting for TCP/DNS timeouts
   if (!isSupabaseOnline()) {
     throw new Error('Supabase backend is currently offline or unreachable');
   }
@@ -56,7 +54,6 @@ async function resilientSupabaseFetch(
     controller.abort();
   }, REQUEST_TIMEOUT_MS);
 
-  // Combine user signal with timeout signal if provided
   const userSignal = init?.signal;
   if (userSignal) {
     userSignal.addEventListener('abort', () => controller.abort(), { once: true });
@@ -68,11 +65,11 @@ async function resilientSupabaseFetch(
       signal: controller.signal,
     });
 
-    // Successfully responded
-    resetCircuitBreaker();
+    if (response.ok || response.status < 500) {
+      resetCircuitBreaker();
+    }
     return response;
-  } catch (error: any) {
-    // Check if network failed, aborted, or connection refused
+  } catch (error: unknown) {
     tripCircuitBreaker();
     throw error;
   } finally {
@@ -80,12 +77,13 @@ async function resilientSupabaseFetch(
   }
 }
 
-// Browser client for client-side usage with resilient timeout
+// Browser client for client-side usage with persisted session
 export const supabaseBrowser = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storageKey: 'flowstate-supabase-auth',
   },
   global: {
     fetch: resilientSupabaseFetch,

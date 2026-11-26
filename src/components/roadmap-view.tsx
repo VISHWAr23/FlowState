@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Map, Briefcase, Code, MessageCircle, Plus, CheckCircle2, Circle, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks';
 
 type RoadmapType = 'placement' | 'coding' | 'english';
 
@@ -44,8 +45,25 @@ const INITIAL_ROADMAPS: Record<RoadmapType, Block[]> = {
 };
 
 export function RoadmapView() {
+  const { data: user } = useAuth();
   const [activeTab, setActiveTab] = useState<RoadmapType>('placement');
   const [roadmaps, setRoadmaps] = useState(INITIAL_ROADMAPS);
+
+  useEffect(() => {
+    const cloudRoadmaps = (user?.preferences as Record<string, any> | undefined)?.roadmaps;
+    if (cloudRoadmaps && typeof cloudRoadmaps === 'object') {
+      setRoadmaps(cloudRoadmaps);
+    }
+  }, [user?.preferences]);
+
+  const persistRoadmaps = useCallback((nextRoadmaps: Record<RoadmapType, Block[]>) => {
+    setRoadmaps(nextRoadmaps);
+    fetch('/api/auth/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preferences: { roadmaps: nextRoadmaps } }),
+    }).catch(() => {});
+  }, []);
   
   const tabs: { id: RoadmapType, label: string, icon: any }[] = [
     { id: 'placement', label: 'Placement', icon: Briefcase },
@@ -56,12 +74,13 @@ export function RoadmapView() {
   const currentBlocks = roadmaps[activeTab];
 
   const toggleTask = (id: string) => {
-    setRoadmaps(prev => ({
-      ...prev,
-      [activeTab]: prev[activeTab].map(block => 
+    const next = {
+      ...roadmaps,
+      [activeTab]: roadmaps[activeTab].map(block => 
         block.id === id ? { ...block, completed: !block.completed } : block
       )
-    }));
+    };
+    persistRoadmaps(next);
   };
 
   const addBlock = (type: 'heading' | 'task') => {
@@ -71,10 +90,31 @@ export function RoadmapView() {
       content: type === 'heading' ? 'New Section' : 'New Task',
       completed: type === 'task' ? false : undefined,
     };
-    setRoadmaps(prev => ({
-      ...prev,
-      [activeTab]: [...prev[activeTab], newBlock]
-    }));
+    const next = {
+      ...roadmaps,
+      [activeTab]: [...roadmaps[activeTab], newBlock]
+    };
+    persistRoadmaps(next);
+  };
+
+  const updateBlockContent = (id: string, content: string) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    const next = {
+      ...roadmaps,
+      [activeTab]: roadmaps[activeTab].map(block =>
+        block.id === id ? { ...block, content: trimmed } : block
+      )
+    };
+    persistRoadmaps(next);
+  };
+
+  const deleteBlock = (id: string) => {
+    const next = {
+      ...roadmaps,
+      [activeTab]: roadmaps[activeTab].filter(block => block.id !== id)
+    };
+    persistRoadmaps(next);
   };
 
   return (
@@ -138,14 +178,30 @@ export function RoadmapView() {
                 </div>
 
                 {block.type === 'heading' && (
-                  <h2 className="text-xl font-bold mt-6 mb-2 outline-none" contentEditable suppressContentEditableWarning>
-                    {block.content}
-                  </h2>
+                  <div className="flex items-center justify-between w-full mt-6 mb-2 gap-2">
+                    <h2
+                      className="text-xl font-bold outline-none flex-1 rounded px-1 focus:bg-accent/40"
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(e) => updateBlockContent(block.id, e.currentTarget.textContent || '')}
+                    >
+                      {block.content}
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => deleteBlock(block.id)}
+                      className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                      aria-label={`Delete section ${block.content}`}
+                      title="Delete section"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 )}
 
                 {block.type === 'task' && (
                   <div className="flex items-start gap-3 w-full p-2 hover:bg-accent/50 rounded-lg transition-colors group/task">
-                    <button onClick={() => toggleTask(block.id)} className="mt-0.5">
+                    <button type="button" onClick={() => toggleTask(block.id)} className="mt-0.5 cursor-pointer">
                       {block.completed ? (
                         <CheckCircle2 className="w-5 h-5 text-primary" />
                       ) : (
@@ -154,24 +210,34 @@ export function RoadmapView() {
                     </button>
                     <div 
                       className={cn(
-                        "flex-1 outline-none text-base transition-all",
+                        "flex-1 outline-none text-base transition-all rounded px-1 focus:bg-accent/40",
                         block.completed && "line-through text-muted-foreground opacity-70"
                       )}
                       contentEditable
                       suppressContentEditableWarning
+                      onBlur={(e) => updateBlockContent(block.id, e.currentTarget.textContent || '')}
                     >
                       {block.content}
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => deleteBlock(block.id)}
+                      className="p-1 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                      aria-label={`Delete task ${block.content}`}
+                      title="Delete item"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 )}
               </motion.div>
             ))}
 
-            <div className="pt-8 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => addBlock('task')} className="inline-flex items-center gap-2 px-3 py-1.5 bg-accent hover:bg-accent/80 text-foreground text-sm rounded-lg transition-colors">
+            <div className="pt-8 flex gap-2">
+              <button type="button" onClick={() => addBlock('task')} className="inline-flex items-center gap-2 px-3 py-1.5 bg-accent hover:bg-accent/80 text-foreground text-sm rounded-lg transition-colors cursor-pointer">
                 <Plus className="w-4 h-4" /> Add Task
               </button>
-              <button onClick={() => addBlock('heading')} className="inline-flex items-center gap-2 px-3 py-1.5 bg-accent hover:bg-accent/80 text-foreground text-sm rounded-lg transition-colors">
+              <button type="button" onClick={() => addBlock('heading')} className="inline-flex items-center gap-2 px-3 py-1.5 bg-accent hover:bg-accent/80 text-foreground text-sm rounded-lg transition-colors cursor-pointer">
                 <Plus className="w-4 h-4" /> Add Section
               </button>
             </div>

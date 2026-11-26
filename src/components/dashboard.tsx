@@ -25,7 +25,9 @@ import {
 } from 'lucide-react';
 import {
   useTasks,
+  useAllTasks,
   useHabits,
+  useTodayHabitLogs,
   useCompleteHabit,
   useFocusSessions,
   useDailyLog,
@@ -39,15 +41,17 @@ import { useAppStore } from '@/lib/store';
 import { cn, formatDuration, getToday, formatDateFull } from '@/lib/utils';
 import { PriorityDot } from './ui/priority-dot';
 import { TaskModal } from './modals/task-modal';
-import type { Task, Priority } from '@/types/types';
+import type { Task, Priority, FocusSession } from '@/types/types';
 import Link from 'next/link';
 
 export function Dashboard() {
   const router = useRouter();
   const { data: user } = useAuth();
   const logout = useLogout();
+  const todayStr = getToday();
   const { data: tasks, isLoading: tasksLoading } = useTasks();
   const { data: habits } = useHabits();
+  const { data: todayHabitLogs } = useTodayHabitLogs(todayStr);
   const { data: sessions } = useFocusSessions();
   const { data: dailyLog } = useDailyLog();
   const completeTask = useCompleteTask();
@@ -67,12 +71,10 @@ export function Dashboard() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskTab, setTaskTab] = useState<'priorities' | 'history'>('priorities');
   const [historyScope, setHistoryScope] = useState<'today' | 'all'>('today');
+  const { data: allTasksData } = useAllTasks(taskTab === 'history' && historyScope === 'all');
   const inlineInputRef = useRef<HTMLInputElement>(null);
 
-  const allStoreTasks = useAppStore((state) => state.tasks);
-
   // Time and Greeting
-  const todayStr = getToday();
   const todayFormatted = formatDateFull(todayStr);
 
   const getTimeOfDay = () => {
@@ -88,8 +90,8 @@ export function Dashboard() {
   const pendingTasks = tasks?.filter((t) => t.status !== 'completed') || [];
   const taskRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  // Task history collections
-  const allTasksPool = allStoreTasks && allStoreTasks.length > 0 ? allStoreTasks : (tasks || []);
+  // Task history collections strictly from database
+  const allTasksPool = allTasksData && allTasksData.length > 0 ? allTasksData : (tasks || []);
   const todayCompletedTasks = (tasks || []).filter((t) => t.status === 'completed');
   const allCompletedTasks = allTasksPool
     .filter((t) => t.status === 'completed')
@@ -101,7 +103,7 @@ export function Dashboard() {
   const displayedCompletedTasks = historyScope === 'today' ? todayCompletedTasks : allCompletedTasks;
 
   // Real focus minutes from completed sessions
-  const completedSessions = sessions?.filter((s) => s.status === 'completed') || [];
+  const completedSessions = sessions?.filter((s: FocusSession) => s.status === 'completed') || [];
   const focusMinutes = completedSessions.reduce((acc, s) => acc + (s.actual_duration || 0), 0);
   const focusHoursFormatted = formatDuration(focusMinutes);
   const focusPercent = Math.min(Math.round((focusMinutes / dailyFocusTargetMinutes) * 100), 100);
@@ -136,8 +138,6 @@ export function Dashboard() {
         })
         .slice(0, 3)
     : [];
-
-  const dailyScores = useAppStore((state) => state.dailyScores);
 
   const handleTaskToggle = (task: Task) => {
     if (task.status === 'completed') {
@@ -761,7 +761,7 @@ export function Dashboard() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {habits.slice(0, 6).map((habit) => {
-              const isDone = !!dailyScores[todayStr]?.[`habit_${habit.id}`];
+              const isDone = Boolean(todayHabitLogs?.some((l) => l.habit_id === habit.id));
               return (
                 <div
                   key={habit.id}

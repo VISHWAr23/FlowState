@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { User, AtSign, Mail, Lock, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { AuthLayout } from '@/components/auth-layout';
 import { useAppStore } from '@/lib/store';
+import { supabaseBrowser, isPlaceholderUrl } from '@/lib/supabase';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -113,8 +114,9 @@ export default function SignupPage() {
         return;
       }
 
-      // Successful signup with auto-login -> store user and navigate to profile
+      // Successful signup with auto-login -> reset stale store & set user
       if (data?.user) {
+        useAppStore.getState().resetUserStore();
         useAppStore.getState().setUser(data.user);
         useAppStore.getState().addToast({
           type: 'success',
@@ -122,6 +124,11 @@ export default function SignupPage() {
           description: 'Your profile has been created successfully.',
         });
       }
+
+      if (data?.supabaseSession && !isPlaceholderUrl) {
+        await supabaseBrowser.auth.setSession(data.supabaseSession).catch(() => {});
+      }
+
       window.location.href = '/profile';
     } catch {
       setFieldErrors({ form: 'An unexpected connection error occurred. Please try again.' });

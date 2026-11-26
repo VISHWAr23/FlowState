@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Clock, Plus, ChevronLeft, ChevronRight, AlertCircle, Calendar as CalendarIcon, LayoutGrid } from 'lucide-react';
 import { cn, toLocalDateString } from '@/lib/utils';
-import { useTasks } from '@/hooks';
+import { useTasks, useTimeBlocks } from '@/hooks';
 import { useAppStore } from '@/lib/store';
 import { TimeBlockModal } from './modals/timeblock-modal';
 import type { TimeBlock } from '@/types/types';
@@ -23,15 +23,17 @@ const getColumnDate = (dayIndex: number, weekOffset: number) => {
 
 export function TimetableView() {
   const { data: tasks } = useTasks();
+  const { data: syncedBlocks } = useTimeBlocks();
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const [view, setView] = useState<'day' | 'week'>('week');
   const [currentDayIndex, setCurrentDayIndex] = useState(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  const timeBlocks = useAppStore(state => state.timeBlocks);
+  const timeBlocks = syncedBlocks || [];
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedBlock, setSelectedBlock] = useState<TimeBlock | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedHour, setSelectedHour] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -122,7 +124,7 @@ export function TimetableView() {
           </div>
 
           <button 
-            onClick={() => { setSelectedBlock(null); setSelectedDate(getColumnDate(currentDayIndex, currentWeekOffset)); setIsModalOpen(true); }}
+            onClick={() => { setSelectedBlock(null); setSelectedHour(null); setSelectedDate(getColumnDate(currentDayIndex, currentWeekOffset)); setIsModalOpen(true); }}
             className="w-full sm:w-auto inline-flex justify-center items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
@@ -202,8 +204,9 @@ export function TimetableView() {
                       {/* Half-hour indicator line */}
                       <div className="absolute top-1/2 left-0 w-full border-t border-dashed border-border/40 pointer-events-none" />
                       <button 
-                        onClick={() => { setSelectedBlock(null); setSelectedDate(colDate); setIsModalOpen(true); }}
-                        className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                        onClick={() => { setSelectedBlock(null); setSelectedHour(hour); setSelectedDate(colDate); setIsModalOpen(true); }}
+                        className="absolute inset-0 w-full h-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                        aria-label={`Add block at ${formatHour(hour)}`}
                       >
                         <Plus className="w-5 h-5 text-muted-foreground bg-background rounded-full p-0.5 shadow-sm border border-border" />
                       </button>
@@ -217,7 +220,7 @@ export function TimetableView() {
                       durationHours={block.durationHours} 
                       color={block.color} 
                       title={block.title} 
-                      onClick={() => { setSelectedBlock(block); setSelectedDate(colDate); setIsModalOpen(true); }}
+                      onClick={() => { setSelectedBlock(block); setSelectedHour(null); setSelectedDate(colDate); setIsModalOpen(true); }}
                     />
                   ))}
                 </div>
@@ -226,7 +229,13 @@ export function TimetableView() {
           </div>
         </div>
       </div>
-      <TimeBlockModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} block={selectedBlock} selectedDate={selectedDate} />
+      <TimeBlockModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        block={selectedBlock}
+        selectedDate={selectedDate}
+        defaultStartHour={selectedHour}
+      />
     </div>
   );
 }

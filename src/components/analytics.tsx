@@ -14,7 +14,7 @@ import {
   Clock,
   Sparkles,
 } from 'lucide-react';
-import { useAnalytics, useFocusSessions, useTasks, useHabits } from '@/hooks';
+import { useAnalytics, useAllTasks, useHabits } from '@/hooks';
 import { useAppStore } from '@/lib/store';
 import { cn, formatDuration } from '@/lib/utils';
 import {
@@ -38,10 +38,10 @@ const PERIODS = [
 export function AnalyticsDashboard() {
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
   const { data: analytics, isLoading } = useAnalytics(period);
-  const { data: allSessions } = useFocusSessions();
   const { data: habits } = useHabits();
+  const { data: allTasksData } = useAllTasks();
   const dailyFocusTargetMinutes = useAppStore((state) => state.dailyFocusTargetMinutes);
-  const allTasks = useAppStore((state) => state.tasks);
+  const allTasks = allTasksData || [];
   const completedTasksList = allTasks
     .filter((t) => t.status === 'completed')
     .sort((a, b) => new Date(b.completed_at || b.updated_at).getTime() - new Date(a.completed_at || a.updated_at).getTime());

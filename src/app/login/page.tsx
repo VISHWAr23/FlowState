@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { User, Lock, Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { AuthLayout } from '@/components/auth-layout';
 import { useAppStore } from '@/lib/store';
+import { supabaseBrowser, isPlaceholderUrl } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -50,9 +51,17 @@ export default function LoginPage() {
         return;
       }
 
-      // Successful login -> set user in store immediately
+      // Successful login -> reset stale local cache if switching users & set authenticated user
       if (data?.user) {
+        const previousUserId = useAppStore.getState().user?.id;
+        if (previousUserId && previousUserId !== data.user.id) {
+          useAppStore.getState().resetUserStore();
+        }
         useAppStore.getState().setUser(data.user);
+      }
+
+      if (data?.supabaseSession && !isPlaceholderUrl) {
+        await supabaseBrowser.auth.setSession(data.supabaseSession).catch(() => {});
       }
 
       // Navigate to dashboard
